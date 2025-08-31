@@ -20,25 +20,28 @@ import {
   Plus,
   Archive,
   MoreVertical,
-  Download
+  Download,
+  MessageSquare,
+  GitPullRequestArrow // New icon for feedback
 } from "lucide-react";
 import { format } from "date-fns";
-import { TOEFolder, TOE } from "@/api/entities";
+import { TOEFolder, TOE, TOEReview } from "@/api/entities";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
   DropdownMenuSub,
+  DropdownMenuSubContent,
   DropdownMenuSubTrigger,
-  DropdownMenuSubContent
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 
 export default function TOEList({ 
   toes, 
   clients, 
+  reviews,
   isLoading, 
   onEdit, 
   onSend, 
@@ -47,8 +50,9 @@ export default function TOEList({
   onDuplicate, 
   onGenerateLink, 
   onDelete,
-  onDownloadSigned, // This prop is still present in the function signature but its usage in the UI is removed.
-  onDownloadSignedTest // This prop is no longer used but kept to avoid breaking changes if used elsewhere.
+  onViewFeedback, 
+  onDownloadSigned, 
+  onDownloadSignedTest 
 }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -105,7 +109,10 @@ export default function TOEList({
   const getStatusColor = (status) => {
     switch (status) {
       case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'sent': return 'bg-blue-100 text-blue-800';
+      case 'internal_review': return 'bg-yellow-100 text-yellow-800';
+      case 'review_completed': return 'bg-indigo-100 text-indigo-800';
+      case 'ready_to_send': return 'bg-blue-100 text-blue-800'; // New status color
+      case 'sent': return 'bg-purple-100 text-purple-800'; // Updated color for sent
       case 'signed': return 'bg-green-100 text-green-800';
       case 'expired': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -161,12 +168,15 @@ export default function TOEList({
             </div>
             <div className="flex gap-2">
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-40">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="internal_review">Internal Review</SelectItem>
+                  <SelectItem value="review_completed">Review Completed</SelectItem>
+                  <SelectItem value="ready_to_send">Ready to Send</SelectItem> {/* New filter option */}
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="signed">Signed</SelectItem>
                   <SelectItem value="expired">Expired</SelectItem>
@@ -241,6 +251,7 @@ export default function TOEList({
       <div className="grid gap-6">
         {filteredTOEs.map((toe) => {
           const client = getClient(toe.client_id);
+          const toeReviews = reviews.filter(r => r.toe_id === toe.id && r.status === 'completed');
           
           return (
             <Card key={toe.id} className="hover:shadow-md transition-shadow">
@@ -251,7 +262,7 @@ export default function TOEList({
                       <FileText className="w-5 h-5 text-purple-600" />
                       <CardTitle className="text-lg">{toe.project_title}</CardTitle>
                       <Badge className={getStatusColor(toe.status)}>
-                        {toe.status}
+                        {toe.status.replace(/_/g, ' ')}
                       </Badge>
                       {toe.project_created && (
                         <Badge className="bg-green-100 text-green-800">
@@ -259,6 +270,12 @@ export default function TOEList({
                           Project Created
                         </Badge>
                       )}
+                      {toe.status === 'review_completed' && toeReviews.length > 0 && (
+                         <Badge variant="outline" className="border-green-300 text-green-800">
+                           <MessageSquare className="w-3 h-3 mr-1" />
+                           Review Feedback
+                         </Badge>
+                       )}
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p><strong>Client:</strong> {client?.company_name || 'Unknown Client'}</p>
@@ -276,9 +293,15 @@ export default function TOEList({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => onEdit(toe)}>
-                        <Edit className="w-4 h-4 mr-2" /> Edit
-                      </DropdownMenuItem>
+                      {toe.status === 'review_completed' ? (
+                        <DropdownMenuItem onClick={() => onViewFeedback(toe)}>
+                          <GitPullRequestArrow className="w-4 h-4 mr-2" /> View Feedback
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem onClick={() => onEdit(toe)} disabled={toe.status === 'internal_review'}>
+                          <Edit className="w-4 h-4 mr-2" /> Edit
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={() => onPreview(toe)}>
                         <Eye className="w-4 h-4 mr-2" /> Preview
                       </DropdownMenuItem>
@@ -300,7 +323,7 @@ export default function TOEList({
                         </DropdownMenuSubContent>
                       </DropdownMenuSub>
                       <DropdownMenuSeparator />
-                      {toe.status === 'draft' && (
+                      {toe.status === 'ready_to_send' && ( // Condition changed to 'ready_to_send'
                         <DropdownMenuItem onClick={() => onSend(toe.id)}>
                           <Send className="w-4 h-4 mr-2" /> Mark as Sent
                         </DropdownMenuItem>

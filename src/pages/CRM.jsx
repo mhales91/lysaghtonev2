@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Client, User, TOE } from "@/api/entities";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,7 @@ import { addDays, format } from "date-fns";
 
 import PipelineBoard from "../components/crm/PipelineBoard";
 import ClientForm from "../components/crm/ClientForm";
+import { useLocation } from "react-router-dom";
 
 export default function CRM() {
   const [clients, setClients] = useState([]);
@@ -16,10 +18,16 @@ export default function CRM() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const location = useLocation();
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const searchParam = params.get('search');
+    if (searchParam) {
+      setSearchTerm(searchParam);
+    }
     loadData();
-  }, []);
+  }, [location.search]);
 
   useEffect(() => {
     let filtered = clients;

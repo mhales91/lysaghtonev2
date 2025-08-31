@@ -4,8 +4,6 @@ import Dashboard from "./Dashboard";
 
 import CRM from "./CRM";
 
-import TOEBuilder from "./TOEBuilder";
-
 import Timesheets from "./Timesheets";
 
 import Projects from "./Projects";
@@ -36,6 +34,18 @@ import TOEAdmin from "./TOEAdmin";
 
 import JobsImport from "./JobsImport";
 
+import Analytics from "./Analytics";
+
+import AnalyticsSettings from "./AnalyticsSettings";
+
+import ProjectDetail from "./ProjectDetail";
+
+import TOEManager from "./TOEManager";
+
+import DashboardSettings from "./DashboardSettings";
+
+import Agent from "./Agent";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -43,8 +53,6 @@ const PAGES = {
     Dashboard: Dashboard,
     
     CRM: CRM,
-    
-    TOEBuilder: TOEBuilder,
     
     Timesheets: Timesheets,
     
@@ -75,6 +83,18 @@ const PAGES = {
     TOEAdmin: TOEAdmin,
     
     JobsImport: JobsImport,
+    
+    Analytics: Analytics,
+    
+    AnalyticsSettings: AnalyticsSettings,
+    
+    ProjectDetail: ProjectDetail,
+    
+    TOEManager: TOEManager,
+    
+    DashboardSettings: DashboardSettings,
+    
+    Agent: Agent,
     
 }
 
@@ -107,8 +127,6 @@ function PagesContent() {
                 
                 <Route path="/CRM" element={<CRM />} />
                 
-                <Route path="/TOEBuilder" element={<TOEBuilder />} />
-                
                 <Route path="/Timesheets" element={<Timesheets />} />
                 
                 <Route path="/Projects" element={<Projects />} />
@@ -138,6 +156,18 @@ function PagesContent() {
                 <Route path="/TOEAdmin" element={<TOEAdmin />} />
                 
                 <Route path="/JobsImport" element={<JobsImport />} />
+                
+                <Route path="/Analytics" element={<Analytics />} />
+                
+                <Route path="/AnalyticsSettings" element={<AnalyticsSettings />} />
+                
+                <Route path="/ProjectDetail" element={<ProjectDetail />} />
+                
+                <Route path="/TOEManager" element={<TOEManager />} />
+                
+                <Route path="/DashboardSettings" element={<DashboardSettings />} />
+                
+                <Route path="/Agent" element={<Agent />} />
                 
             </Routes>
         </Layout>

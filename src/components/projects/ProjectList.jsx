@@ -3,9 +3,11 @@ import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MoreHorizontal, Edit, Trash2, Plus, ArrowUp, ArrowDown } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Plus, ArrowUp, ArrowDown, Archive, ArchiveRestore } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,9 +29,9 @@ const SortableHeader = ({ children, sortKey, sortConfig, onSort }) => {
   );
 };
 
-export default function ProjectList({ 
-  projects, clients, isLoading, onEdit, onDelete, onAddDefaultTasks,
-  selectedProjectIds, onSelect, onSelectAll, sortConfig, onSort
+export default function ProjectList({
+  projects, clients, isLoading, onDelete, onAddDefaultTasks, onArchive, onUnarchive,
+  selectedProjectIds, onSelect, onSelectAll, sortConfig, onSort, isArchiveView = false
 }) {
 
   const getClientName = (clientId) => {
@@ -83,6 +85,7 @@ export default function ProjectList({
             <SortableHeader sortKey="client_id" sortConfig={sortConfig} onSort={onSort}>Client</SortableHeader>
             <TableHead>Budget Utilisation</TableHead>
             <TableHead>Status</TableHead>
+            {isArchiveView && <TableHead>Archived Date</TableHead>}
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -97,20 +100,29 @@ export default function ProjectList({
                 />
               </TableCell>
               <TableCell className="font-medium">{project.job_number}</TableCell>
-              <TableCell>{project.project_name}</TableCell>
+              <TableCell>
+                <Link to={createPageUrl(`ProjectDetail?id=${project.id}`)} className="font-medium text-purple-600 hover:underline">
+                  {project.project_name}
+                </Link>
+              </TableCell>
               <TableCell>{getClientName(project.client_id)}</TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
                   <span>{project.budget_utilisation || 0}%</span>
                   <div className="w-24 h-2 bg-gray-200 rounded-full">
-                    <div 
-                      className="h-2 bg-green-500 rounded-full" 
+                    <div
+                      className="h-2 bg-green-500 rounded-full"
                       style={{ width: `${project.budget_utilisation || 0}%` }}
                     ></div>
                   </div>
                 </div>
               </TableCell>
               <TableCell>{getStatusBadge(project.status)}</TableCell>
+              {isArchiveView && (
+                <TableCell>
+                  {project.archived_date ? new Date(project.archived_date).toLocaleDateString() : 'N/A'}
+                </TableCell>
+              )}
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -119,16 +131,32 @@ export default function ProjectList({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => onEdit(project)}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit
+                    <DropdownMenuItem asChild>
+                      <Link to={createPageUrl(`ProjectDetail?id=${project.id}`)}>
+                        <Edit className="w-4 h-4 mr-2" />
+                        View / Edit
+                      </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onAddDefaultTasks(project)}>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Default Tasks
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                        onClick={() => onDelete(project.id)} 
+                    {!isArchiveView && (
+                      <>
+                        <DropdownMenuItem onClick={() => onAddDefaultTasks && onAddDefaultTasks(project)}>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Default Tasks
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onArchive && onArchive(project.id)}>
+                          <Archive className="w-4 h-4 mr-2" />
+                          Archive Project
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {isArchiveView && (
+                      <DropdownMenuItem onClick={() => onUnarchive && onUnarchive(project.id)}>
+                        <ArchiveRestore className="w-4 h-4 mr-2" />
+                        Unarchive Project
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                        onClick={() => onDelete(project.id)}
                         className="text-red-600 focus:text-red-600"
                     >
                       <Trash2 className="w-4 h-4 mr-2" />

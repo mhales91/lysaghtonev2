@@ -11,14 +11,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvokeLLM } from "@/api/integrations";
 import { TagLibrary, CompanySettings, TOESignature, TaskTemplate, Client, User, TOELibraryItem } from "@/api/entities";
-import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, FileDown, Share, Edit2 } from "lucide-react";
+import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, FileDown, Share, Edit2, UserCheck } from "lucide-react";
 
 import CostCalculator from "./CostCalculator";
 import TagSelector from "./TagSelector"; // This component might still be useful for general tags, but its specific uses in Scope/Assumptions/Exclusions steps are replaced by library items.
 import SignatureModal from "./SignatureModal";
 import ClientForm from "../crm/ClientForm";
 
-export default function TOEWizard({ toe, clients, onSave, onCancel }) {
+export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false); // This state is no longer strictly needed but is left for now.
   const [suggestedTags, setSuggestedTags] = useState([]);
@@ -31,8 +31,10 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
   const [taskTemplates, setTaskTemplates] = useState([]);
   const [showClientForm, setShowClientForm] = useState(false);
   const [allClients, setAllClients] = useState(clients);
-  const [allUsers, setAllUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState(users);
   const [libraryItems, setLibraryItems] = useState([]); // New state for library items
+  const [reviewers, setReviewers] = useState([]); // For internal review step
+  const [showPreReviewVersion, setShowPreReviewVersion] = useState(false);
 
   const [formData, setFormData] = useState({
     client_id: toe?.client_id || '',
@@ -55,6 +57,9 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
       setLysaghtSignatureRecord(null);
     }
   }, [toe]);
+
+  // Check if this TOE has a pre-review version
+  const hasPreReviewVersion = !!toe?.pre_review_version;
 
   const loadData = async () => {
     try {
@@ -232,6 +237,12 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
     const total = subtotal + gst;
     return { subtotal, gst, total };
   };
+  
+  const handleReviewerChange = (email, isChecked) => {
+    setReviewers(prev => 
+      isChecked ? [...prev, email] : prev.filter(r => r !== email)
+    );
+  };
 
   const handleSubmit = async () => {
     setIsSaving(true);
@@ -263,7 +274,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
         return;
       }
 
-      await onSave(submitData);
+      await onSave(submitData, { reviewers });
     } catch (error) {
       console.error('Error saving TOE:', error);
       alert('Error saving TOE. Please try again.');
@@ -289,7 +300,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
 
     if (!currentSigRecord?.lysaght_signature) {
       alert("Lysaght signature is required before generating a share link. Please provide a signature in the 'Review' step.");
-      setCurrentStep(5);
+      setCurrentStep(6);
       return;
     }
     
@@ -308,7 +319,8 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
     { number: 2, title: 'Scope of Work', description: 'Define project scope' },
     { number: 3, title: 'Fee Structure', description: 'Set pricing and fees' },
     { number: 4, title: 'Assumptions & Exclusions', description: 'Add conditions' },
-    { number: 5, title: 'Review', description: 'Final review and save' }
+    { number: 5, title: 'Internal Review', description: 'Request peer review' },
+    { number: 6, title: 'Review & Finalize', description: 'Final review and save' }
   ];
 
   const getSelectedClient = () => {
@@ -323,6 +335,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
         return !!(formData.scope_of_work?.trim());
       case 3:
       case 4:
+      case 5:
         return true; // No strict validation for these steps
       default:
         return false;
@@ -341,6 +354,20 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
     }
   };
 
+  const getDisplayedFeeStructure = () => {
+    return showPreReviewVersion && hasPreReviewVersion
+      ? toe.pre_review_version.fee_structure || []
+      : formData.fee_structure;
+  }
+
+  const calculateDisplayedTotals = () => {
+    const displayedFeeStructure = getDisplayedFeeStructure();
+    const subtotal = displayedFeeStructure.reduce((sum, item) => sum + (item.cost || 0), 0);
+    const gst = subtotal * (companySettings?.tax_rate || 0.15);
+    const total = subtotal + gst;
+    return { subtotal, gst, total };
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <Card className="w-full max-w-6xl max-h-[95vh] overflow-y-auto">
@@ -353,6 +380,21 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
               <p className="text-sm text-gray-600 mt-1">
                 Step {currentStep} of {steps.length}: {steps[currentStep - 1]?.title}
               </p>
+              {hasPreReviewVersion && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                    Review Changes Applied
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPreReviewVersion(!showPreReviewVersion)}
+                    className="text-xs"
+                  >
+                    {showPreReviewVersion ? 'Show Current Version' : 'Show Pre-Review Version'}
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="flex gap-2">
               {toe && (
@@ -405,6 +447,15 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
         </CardHeader>
 
         <CardContent className="p-6">
+          {/* Show pre-review version notice */}
+          {hasPreReviewVersion && showPreReviewVersion && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Viewing Pre-Review Version:</strong> This is how the TOE looked before review changes were applied on {toe.pre_review_version?.saved_at ? new Date(toe.pre_review_version.saved_at).toLocaleDateString() : 'an unknown date'}.
+              </p>
+            </div>
+          )}
+
           {/* Step 1: Project Details */}
           {currentStep === 1 && (
             <div className="space-y-6">
@@ -417,6 +468,8 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     onChange={(e) => handleInputChange('project_title', e.target.value)}
                     placeholder="Enter project title"
                     required
+                    readOnly={showPreReviewVersion}
+                    className={showPreReviewVersion ? 'bg-gray-50' : ''}
                   />
                 </div>
                 
@@ -426,8 +479,9 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <Select
                       value={formData.client_id}
                       onValueChange={(value) => handleInputChange('client_id', value)}
+                      disabled={showPreReviewVersion}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className={showPreReviewVersion ? 'bg-gray-50' : ''}>
                         <SelectValue placeholder="Select a client" />
                       </SelectTrigger>
                       <SelectContent>
@@ -438,7 +492,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button type="button" variant="outline" onClick={() => setShowClientForm(true)}>
+                    <Button type="button" variant="outline" onClick={() => setShowClientForm(true)} disabled={showPreReviewVersion}>
                       <Plus className="w-4 h-4 mr-2" /> New
                     </Button>
                   </div>
@@ -451,6 +505,8 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                   id="version"
                   value={formData.version}
                   onChange={(e) => handleInputChange('version', e.target.value)}
+                  readOnly={showPreReviewVersion}
+                  className={showPreReviewVersion ? 'bg-gray-50' : ''}
                 />
               </div>
 
@@ -486,7 +542,6 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                   <h3 className="text-lg font-semibold">Scope of Work</h3>
                   <p className="text-sm text-gray-600">Define what work will be performed</p>
                 </div>
-                {/* AI suggestions button removed */}
               </div>
 
               <div className="grid lg:grid-cols-3 gap-6">
@@ -495,10 +550,14 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <Label htmlFor="scope">Scope Description *</Label>
                     <Textarea
                       id="scope"
-                      value={formData.scope_of_work}
-                      onChange={(e) => handleInputChange('scope_of_work', e.target.value)}
+                      value={showPreReviewVersion && hasPreReviewVersion ? 
+                        toe.pre_review_version.scope_of_work : 
+                        formData.scope_of_work}
+                      onChange={showPreReviewVersion ? undefined : (e) => handleInputChange('scope_of_work', e.target.value)}
                       placeholder="Describe the scope of work to be performed..."
                       rows={8}
+                      readOnly={showPreReviewVersion}
+                      className={showPreReviewVersion ? 'bg-gray-50' : ''}
                     />
                   </div>
                 </div>
@@ -508,7 +567,11 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <h4 className="font-medium">Scope Library</h4>
                     <div className="space-y-2 max-h-80 overflow-y-auto">
                       {libraryItems.filter(item => item.category === 'scope' && item.is_active).map(item => (
-                        <div key={item.id} className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer" onClick={() => addLibraryItemToField(item, 'scope_of_work')}>
+                        <div 
+                          key={item.id} 
+                          className={`p-3 border rounded-lg ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
+                          onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'scope_of_work')}
+                        >
                           <h5 className="font-medium text-sm">{item.title}</h5>
                           <p className="text-xs text-gray-600 mt-1">{item.content.substring(0, 100)}{item.content.length > 100 ? '...' : ''}</p>
                           {item.tags && item.tags.length > 0 && (
@@ -535,14 +598,14 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                   <h3 className="text-lg font-semibold">Fee Structure</h3>
                   <p className="text-sm text-gray-600">Break down the project costs and link to task templates</p>
                 </div>
-                <Button onClick={addFeeItem} variant="outline">
+                <Button onClick={addFeeItem} variant="outline" disabled={showPreReviewVersion}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Item
                 </Button>
               </div>
 
               <div className="space-y-4">
-                {formData.fee_structure.map((item, index) => (
+                {getDisplayedFeeStructure().map((item, index) => (
                   <Card key={index} className="p-4">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
@@ -552,6 +615,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                             variant="outline"
                             size="sm"
                             onClick={() => setShowCostCalculator(index)}
+                            disabled={showPreReviewVersion}
                           >
                             <Calculator className="w-4 h-4 mr-2" />
                             Calculate Cost
@@ -561,6 +625,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                             size="icon"
                             onClick={() => removeFeeItem(index)}
                             className="text-red-600"
+                            disabled={showPreReviewVersion}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -572,9 +637,11 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                           <Label>Description</Label>
                           <Textarea
                             value={item.description}
-                            onChange={(e) => handleFeeStructureChange(index, 'description', e.target.value)}
+                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'description', e.target.value)}
                             placeholder="e.g. Project Administration"
                             rows={3}
+                            readOnly={showPreReviewVersion}
+                            className={showPreReviewVersion ? 'bg-gray-50' : ''}
                           />
                         </div>
                         <div className="md:col-span-2">
@@ -582,16 +649,20 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                           <Input
                             type="number"
                             value={item.cost}
-                            onChange={(e) => handleFeeStructureChange(index, 'cost', e.target.value)}
+                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'cost', e.target.value)}
                             placeholder="0"
+                            readOnly={showPreReviewVersion}
+                            className={showPreReviewVersion ? 'bg-gray-50' : ''}
                           />
                         </div>
                         <div className="md:col-span-4">
                           <Label>Time Estimate</Label>
                           <Input
                             value={item.time_estimate}
-                            onChange={(e) => handleFeeStructureChange(index, 'time_estimate', e.target.value)}
+                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'time_estimate', e.target.value)}
                             placeholder="e.g. 2 weeks"
+                            readOnly={showPreReviewVersion}
+                            className={showPreReviewVersion ? 'bg-gray-50' : ''}
                           />
                         </div>
                       </div>
@@ -620,11 +691,12 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                           {taskTemplates.map(template => {
                             const isLinked = (item.linked_task_templates || []).includes(template.id);
                             return (
-                              <div key={template.id} className="flex items-center space-x-2 p-2 border rounded hover:bg-gray-50">
+                              <div key={template.id} className={`flex items-center space-x-2 p-2 border rounded ${showPreReviewVersion ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
                                 <Checkbox
                                   id={`fee-${index}-template-${template.id}`}
                                   checked={isLinked}
-                                  onCheckedChange={(checked) => handleTaskTemplateLink(index, template.id, checked)}
+                                  onCheckedChange={showPreReviewVersion ? undefined : (checked) => handleTaskTemplateLink(index, template.id, checked)}
+                                  disabled={showPreReviewVersion}
                                 />
                                 <Label 
                                   htmlFor={`fee-${index}-template-${template.id}`}
@@ -656,15 +728,15 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
-                      <span>${calculateTotals().subtotal.toLocaleString()}</span>
+                      <span>${calculateDisplayedTotals().subtotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>GST ({((companySettings?.tax_rate || 0.15) * 100)}%):</span>
-                      <span>${calculateTotals().gst.toLocaleString()}</span>
+                      <span>${calculateDisplayedTotals().gst.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between font-semibold text-lg border-t pt-2">
                       <span>Total (incl. GST):</span>
-                      <span>${calculateTotals().total.toLocaleString()}</span>
+                      <span>${calculateDisplayedTotals().total.toLocaleString()}</span>
                     </div>
                   </div>
                 </CardContent>
@@ -683,10 +755,14 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <Label htmlFor="assumptions">Assumptions</Label>
                     <Textarea
                       id="assumptions"
-                      value={formData.assumptions}
-                      onChange={(e) => handleInputChange('assumptions', e.target.value)}
+                      value={showPreReviewVersion && hasPreReviewVersion ?
+                        toe.pre_review_version.assumptions :
+                        formData.assumptions}
+                      onChange={showPreReviewVersion ? undefined : (e) => handleInputChange('assumptions', e.target.value)}
                       placeholder="List key assumptions for this project..."
                       rows={6}
+                      readOnly={showPreReviewVersion}
+                      className={showPreReviewVersion ? 'bg-gray-50' : ''}
                     />
                   </div>
 
@@ -694,10 +770,14 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <Label htmlFor="exclusions">Exclusions</Label>
                     <Textarea
                       id="exclusions"
-                      value={formData.exclusions}
-                      onChange={(e) => handleInputChange('exclusions', e.target.value)}
+                      value={showPreReviewVersion && hasPreReviewVersion ?
+                        toe.pre_review_version.exclusions :
+                        formData.exclusions}
+                      onChange={showPreReviewVersion ? undefined : (e) => handleInputChange('exclusions', e.target.value)}
                       placeholder="List what is excluded from this engagement..."
                       rows={6}
+                      readOnly={showPreReviewVersion}
+                      className={showPreReviewVersion ? 'bg-gray-50' : ''}
                     />
                   </div>
                 </div>
@@ -707,7 +787,11 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <h4 className="font-medium">Assumptions Library</h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {libraryItems.filter(item => item.category === 'assumption' && item.is_active).map(item => (
-                        <div key={item.id} className="p-2 border rounded cursor-pointer hover:bg-gray-50" onClick={() => addLibraryItemToField(item, 'assumptions')}>
+                        <div 
+                          key={item.id} 
+                          className={`p-2 border rounded ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
+                          onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'assumptions')}
+                        >
                           <p className="text-sm font-medium">{item.title}</p>
                           <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                         </div>
@@ -719,7 +803,11 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <h4 className="font-medium">Exclusions Library</h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {libraryItems.filter(item => item.category === 'exclusion' && item.is_active).map(item => (
-                        <div key={item.id} className="p-2 border rounded cursor-pointer hover:bg-gray-50" onClick={() => addLibraryItemToField(item, 'exclusions')}>
+                        <div 
+                          key={item.id} 
+                          className={`p-2 border rounded ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
+                          onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'exclusions')}
+                        >
                           <p className="text-sm font-medium">{item.title}</p>
                           <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                         </div>
@@ -731,13 +819,51 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
             </div>
           )}
 
-          {/* Step 5: Review */}
+          {/* Step 5: Internal Review */}
           {currentStep === 5 && (
+            <div className="space-y-6">
+              <div>
+                  <h3 className="text-lg font-semibold">Internal Review</h3>
+                  <p className="text-sm text-gray-600">Select one or more team members to review this TOE before it's sent.</p>
+              </div>
+              
+              <Card>
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4 max-h-80 overflow-y-auto">
+                    {allUsers.map(user => (
+                      <div key={user.id} className={`flex items-center space-x-2 p-3 border rounded-lg ${showPreReviewVersion ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
+                        <Checkbox
+                          id={`reviewer-${user.id}`}
+                          checked={reviewers.includes(user.email)}
+                          onCheckedChange={showPreReviewVersion ? undefined : (checked) => handleReviewerChange(user.email, checked)}
+                          disabled={showPreReviewVersion}
+                        />
+                        <Label 
+                          htmlFor={`reviewer-${user.id}`}
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          {user.full_name}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm text-blue-800">
+                <p>Selected Reviewers: {reviewers.length > 0 ? reviewers.join(', ') : 'None'}</p>
+                <p className="mt-2">When you save, the selected reviewers will be notified and this TOE will be locked for editing until the review is complete.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Step 6: Review */}
+          {currentStep === 6 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Review & Finalize</h3>
                 <AIReviewButton 
-                  toeData={formData} 
+                  toeData={showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version : formData} 
                   client={getSelectedClient()}
                 />
               </div>
@@ -755,11 +881,15 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                       </div>
                       <div>
                         <span className="text-gray-600">Project:</span>
-                        <span className="ml-2 font-medium">{formData.project_title}</span>
+                        <span className="ml-2 font-medium">
+                          {showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version.project_title : formData.project_title}
+                        </span>
                       </div>
                       <div>
                         <span className="text-gray-600">Version:</span>
-                        <span className="ml-2 font-medium">{formData.version}</span>
+                        <span className="ml-2 font-medium">
+                          {showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version.version : formData.version}
+                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -771,15 +901,15 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
                         <span className="text-gray-600">Fee Items:</span>
-                        <span>{formData.fee_structure.length}</span>
+                        <span>{getDisplayedFeeStructure().length}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Subtotal:</span>
-                        <span>${calculateTotals().subtotal.toLocaleString()}</span>
+                        <span>${calculateDisplayedTotals().subtotal.toLocaleString()}</span>
                       </div>
                       <div className="flex justify-between font-semibold">
                         <span>Total (incl. GST):</span>
-                        <span>${calculateTotals().total.toLocaleString()}</span>
+                        <span>${calculateDisplayedTotals().total.toLocaleString()}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -799,7 +929,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <CardContent className="p-4">
                       <h4 className="font-semibold mb-3">Scope of Work</h4>
                       <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
-                        {formData.scope_of_work || 'No scope defined'}
+                        {(showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version.scope_of_work : formData.scope_of_work) || 'No scope defined'}
                       </div>
                     </CardContent>
                   </Card>
@@ -810,7 +940,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <CardContent className="p-4">
                       <h4 className="font-semibold mb-3">Fee Structure</h4>
                       <div className="space-y-3">
-                        {formData.fee_structure.map((item, index) => (
+                        {getDisplayedFeeStructure().map((item, index) => (
                           <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
                             <span className="text-sm">{item.description}</span>
                             <span className="font-medium">${item.cost.toLocaleString()}</span>
@@ -826,7 +956,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <CardContent className="p-4">
                       <h4 className="font-semibold mb-3">Assumptions</h4>
                       <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
-                        {formData.assumptions || 'No assumptions defined'}
+                        {(showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version.assumptions : formData.assumptions) || 'No assumptions defined'}
                       </div>
                     </CardContent>
                   </Card>
@@ -837,7 +967,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                     <CardContent className="p-4">
                       <h4 className="font-semibold mb-3">Exclusions</h4>
                       <div className="text-sm text-gray-700 bg-gray-50 p-3 rounded max-h-32 overflow-y-auto whitespace-pre-wrap">
-                        {formData.exclusions || 'No exclusions defined'}
+                        {(showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version.exclusions : formData.exclusions) || 'No exclusions defined'}
                       </div>
                     </CardContent>
                   </Card>
@@ -863,6 +993,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                         variant="outline" 
                         size="sm" 
                         onClick={() => setShowSignatureModal(true)}
+                        disabled={showPreReviewVersion}
                       >
                         <Edit2 className="w-3 h-3 mr-2" /> 
                         Change Signature
@@ -871,7 +1002,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
                   ) : (
                     <Button 
                       onClick={() => setShowSignatureModal(true)} 
-                      disabled={!toe?.id}
+                      disabled={!toe?.id || showPreReviewVersion}
                       style={{ backgroundColor: '#5E0F68' }}
                       className="hover:bg-purple-700"
                     >
@@ -889,7 +1020,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
             <Button
               variant="outline"
               onClick={handlePrevious}
-              disabled={currentStep === 1}
+              disabled={currentStep === 1 || showPreReviewVersion}
             >
               Previous
             </Button>
@@ -902,7 +1033,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
               {currentStep < steps.length ? (
                 <Button
                   onClick={handleNext}
-                  disabled={!canProceedToNext()}
+                  disabled={!canProceedToNext() || showPreReviewVersion}
                   style={{ backgroundColor: '#5E0F68' }}
                   className="hover:bg-purple-700"
                 >
@@ -911,7 +1042,7 @@ export default function TOEWizard({ toe, clients, onSave, onCancel }) {
               ) : (
                 <Button
                   onClick={handleSubmit}
-                  disabled={isSaving}
+                  disabled={isSaving || showPreReviewVersion}
                   style={{ backgroundColor: '#5E0F68' }}
                   className="hover:bg-purple-700"
                 >

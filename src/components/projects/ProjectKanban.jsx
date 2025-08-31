@@ -7,9 +7,10 @@ import { Building2 } from "lucide-react";
 
 const columns = [
   { id: 'not_started', title: 'Not Started' },
-  { id: 'in_progress', title: 'In Progress' }, // Changed from 'active' to 'in_progress' and 'Active' to 'In Progress'
+  { id: 'active', title: 'Active' }, // Changed from 'in_progress' to match status
   { id: 'on_hold', title: 'On Hold' },
   { id: 'completed', title: 'Completed' }
+  // Note: Archived projects are not shown in Kanban view
 ];
 
 export default function ProjectKanban({ projects, clients, onStatusChange }) {

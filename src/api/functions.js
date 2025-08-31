@@ -9,12 +9,6 @@ export const openaiAdvanced = base44.functions.openaiAdvanced;
 
 export const timesheetManagement = base44.functions.timesheetManagement;
 
-export const aiVectorStore = base44.functions.aiVectorStore;
-
-export const chatWithRetrieval = base44.functions.chatWithRetrieval;
-
-export const chatStandard = base44.functions.chatStandard;
-
 export const generateTOEPDF = base44.functions.generateTOEPDF;
 
 export const generateSignedDocument = base44.functions.generateSignedDocument;

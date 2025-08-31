@@ -2,247 +2,140 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '@/api/entities';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Lock, Trash2, CheckCircle, X } from 'lucide-react'; // Added CheckCircle and X
-import UserEditForm from '../components/admin/UserEditForm';
-import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import UserEditForm from '../components/admin/UserEditForm'; // Assuming this component exists
 
-export default function UserManagement() {
+export default function UserManagementPage() {
     const [users, setUsers] = useState([]);
-    const [currentUser, setCurrentUser] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showForm, setShowForm] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-    const [appCreatorId, setAppCreatorId] = useState(null);
 
     useEffect(() => {
-        loadData();
+        loadUsers();
     }, []);
 
-    const loadData = async () => {
+    const loadUsers = async () => {
         setIsLoading(true);
         try {
-            const [userList, me] = await Promise.all([
-                User.list(),
-                User.me()
-            ]);
-            setUsers(userList);
-            setCurrentUser(me);
-            
-            // Identify app creator - usually the first user created or current admin
-            // Ensure we prioritize users with an 'Admin' role as potential creator, otherwise the first user.
-            const potentialCreator = userList.find(u => u.user_role === 'Admin') || userList[0];
-            if (potentialCreator) {
-                setAppCreatorId(potentialCreator.id);
-            }
+            const usersData = await User.list();
+            setUsers(usersData);
         } catch (error) {
-            console.error("Failed to load data:", error);
+            console.error('Failed to load users:', error);
+            toast.error('Failed to load user data.');
         }
         setIsLoading(false);
     };
 
-    const handleSaveUser = async (userId, data) => {
-        try {
-            await User.update(userId, data);
-            setEditingUser(null);
-            loadData();
-        } catch (error) {
-            console.error("Failed to update user:", error);
-            if (error.response?.data?.message?.includes('creator of the app')) {
-                alert("Cannot update the role of the app creator for security reasons.");
-                setAppCreatorId(userId); // Mark this user as the app creator
-            } else {
-                alert("Failed to update user. Please try again.");
-            }
-        }
+    const handleEditUser = (user) => {
+        setEditingUser(user);
+        setShowForm(true);
     };
 
+    const handleSaveUser = async (userData) => { // Function signature matches expected usage
+        try {
+            await User.update(editingUser.id, userData);
+            toast.success('User updated successfully!');
+            setShowForm(false);
+            setEditingUser(null);
+            loadUsers();
+        } catch (error) {
+            console.error('Failed to save user:', error);
+            toast.error('Failed to save user.');
+        }
+    };
+    
     const handleApproveUser = async (userId) => {
         try {
+            const currentUser = await User.me();
             await User.update(userId, {
                 approval_status: 'approved',
                 approved_by: currentUser.email,
                 approved_date: new Date().toISOString()
             });
-            loadData();
+            toast.success('User approved!');
+            loadUsers();
         } catch (error) {
-            console.error("Failed to approve user:", error);
-            alert("Failed to approve user. Please try again.");
+            console.error('Failed to approve user:', error);
+            toast.error('Failed to approve user.');
         }
     };
 
     const handleRejectUser = async (userId) => {
-        if (confirm('Are you sure you want to reject this user? They will not be able to access the application.')) {
-            try {
-                await User.update(userId, {
-                    approval_status: 'rejected',
-                    approved_by: currentUser.email,
-                    approved_date: new Date().toISOString()
-                });
-                loadData();
-            } catch (error) {
-                console.error("Failed to reject user:", error);
-                alert("Failed to reject user. Please try again.");
-            }
+        try {
+            await User.update(userId, { approval_status: 'rejected' });
+            toast.warning('User rejected.');
+            loadUsers();
+        } catch (error) {
+            console.error('Failed to reject user:', error);
+            toast.error('Failed to reject user.');
         }
     };
 
-    const handleDeleteUser = async (userId, userFullName) => {
-        if (confirm(`Are you sure you want to delete the user "${userFullName}"? This action cannot be undone.`)) {
-            try {
-                await User.delete(userId);
-                loadData();
-            } catch (error) {
-                console.error("Failed to delete user:", error);
-                alert("Failed to delete user. Please try again.");
-            }
+    const getStatusBadge = (status) => {
+        switch (status) {
+            case 'approved': return <Badge variant="success">Approved</Badge>;
+            case 'pending': return <Badge variant="warning">Pending</Badge>;
+            case 'rejected': return <Badge variant="destructive">Rejected</Badge>;
+            default: return <Badge variant="secondary">Unknown</Badge>;
         }
     };
 
-    const isAppCreator = (user) => {
-        return user.id === appCreatorId;
-    };
-
-    const handleEditUser = (user) => {
-        setEditingUser(user);
-    };
-
-    const getApprovalBadge = (user) => {
-        const status = user.approval_status || 'pending';
-        const colors = {
-            pending: 'bg-yellow-100 text-yellow-800',
-            approved: 'bg-green-100 text-green-800',
-            rejected: 'bg-red-100 text-red-800'
-        };
-        
+    if (showForm && editingUser) {
         return (
-            <Badge className={colors[status]}>
-                {status === 'pending' ? 'Pending Approval' : 
-                 status === 'approved' ? 'Approved' : 'Rejected'}
-            </Badge>
+            <UserEditForm
+                user={editingUser}
+                onSave={handleSaveUser}
+                onCancel={() => { setShowForm(false); setEditingUser(null); }}
+            />
         );
-    };
+    }
 
     return (
-        <div className="p-6 space-y-8 min-h-screen bg-gray-50">
-            <div className="max-w-7xl mx-auto">
+        <div className="p-6 min-h-screen bg-gray-50">
+            <div className="max-w-6xl mx-auto">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
-                    <p className="text-gray-600">
-                        View and manage user roles, departments, and approval status.
-                        <br />
-                        <small className="text-amber-600">Note: The app creator's role cannot be changed for security reasons.</small>
-                    </p>
+                    <p className="text-gray-600">Approve, manage, and assign roles to users.</p>
                 </div>
 
                 <Card>
-                    <CardHeader>
-                        <CardTitle>All Users</CardTitle>
-                    </CardHeader>
                     <CardContent>
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>Name</TableHead>
+                                    <TableHead>Full Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
                                     <TableHead>Department</TableHead>
-                                    <TableHead>Office</TableHead>
-                                    <TableHead>Status</TableHead> {/* New Table Head */}
+                                    <TableHead>Status</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
-                                    Array(5).fill(0).map((_, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                                            <TableCell><Skeleton className="h-4 w-24" /></TableCell> {/* New Skeleton Cell */}
-                                            <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                                        </TableRow>
-                                    ))
+                                    <TableRow><TableCell colSpan="6">Loading users...</TableCell></TableRow>
                                 ) : (
                                     users.map(user => (
                                         <TableRow key={user.id}>
-                                            <TableCell className="font-medium">
-                                                {user.full_name}
-                                                {user.id === currentUser?.id && (
-                                                    <Badge variant="outline" className="ml-2 text-xs">You</Badge>
-                                                )}
-                                                {isAppCreator(user) && (
-                                                    <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-800">
-                                                        App Creator
-                                                    </Badge>
-                                                )}
-                                            </TableCell>
+                                            <TableCell className="font-medium">{user.full_name}</TableCell>
                                             <TableCell>{user.email}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{user.user_role || 'Staff'}</Badge>
-                                            </TableCell>
-                                            <TableCell>{user.department || 'Not set'}</TableCell>
-                                            <TableCell>{user.office || 'Not set'}</TableCell>
-                                            <TableCell>{getApprovalBadge(user)}</TableCell> {/* New Table Cell for Status */}
+                                            <TableCell>{user.user_role}</TableCell>
+                                            <TableCell>{user.department}</TableCell>
+                                            <TableCell>{getStatusBadge(user.approval_status)}</TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex gap-1 justify-end">
-                                                    {/* Approval/Rejection buttons for pending users */}
-                                                    {user.approval_status === 'pending' && (
-                                                        <>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleApproveUser(user.id)}
-                                                                className="text-green-600 hover:text-green-700 hover:bg-green-100"
-                                                                title="Approve user"
-                                                            >
-                                                                <CheckCircle className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleRejectUser(user.id)}
-                                                                className="text-red-600 hover:text-red-700 hover:bg-red-100"
-                                                                title="Reject user"
-                                                            >
-                                                                <X className="h-4 w-4" />
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                    
-                                                    {/* Edit button */}
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        onClick={() => handleEditUser(user)}
-                                                        title={isAppCreator(user) ? "App creator role cannot be changed" : "Edit user"}
-                                                    >
-                                                        {isAppCreator(user) ? (
-                                                            <Lock className="h-4 w-4 text-amber-600" />
-                                                        ) : (
-                                                            <Pencil className="h-4 w-4" />
-                                                        )}
-                                                    </Button>
-                                                    
-                                                    {/* Delete button */}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleDeleteUser(user.id, user.full_name)}
-                                                        disabled={isAppCreator(user) || user.id === currentUser?.id}
-                                                        title={
-                                                            isAppCreator(user) ? "Cannot delete the app creator" :
-                                                            user.id === currentUser?.id ? "Cannot delete yourself" :
-                                                            "Delete user"
-                                                        }
-                                                        className="text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                </div>
+                                                {user.approval_status === 'pending' ? (
+                                                    <div className="flex gap-2 justify-end">
+                                                        <Button size="sm" variant="success" onClick={() => handleApproveUser(user.id)}>Approve</Button>
+                                                        <Button size="sm" variant="destructive" onClick={() => handleRejectUser(user.id)}>Reject</Button>
+                                                    </div>
+                                                ) : (
+                                                    <Button size="sm" variant="outline" onClick={() => handleEditUser(user)}>Edit</Button>
+                                                )}
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -252,14 +145,6 @@ export default function UserManagement() {
                     </CardContent>
                 </Card>
             </div>
-            {editingUser && (
-                <UserEditForm
-                    user={editingUser}
-                    isAppCreator={isAppCreator(editingUser)}
-                    onSave={handleSaveUser}
-                    onCancel={() => setEditingUser(null)}
-                />
-            )}
         </div>
     );
 }

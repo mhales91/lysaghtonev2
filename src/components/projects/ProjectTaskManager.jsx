@@ -1,171 +1,131 @@
+
 import React, { useState, useEffect } from 'react';
-import { Task, TaskTemplate } from '@/api/entities';
+import { Task, User } from '@/api/entities';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Edit2 } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { Plus } from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import TaskList from '@/components/tasks/TaskList';
+import TaskForm from '@/components/tasks/TaskForm';
+import { toast } from 'sonner'; // Changed from react-toastify to sonner
+
+// Define handleApiError and handleSuccess locally, as per outline implications
+const handleApiError = (error, context = "An operation") => {
+    console.error(`Error during ${context}:`, error);
+    const errorMessage = error.response?.data?.message || error.message || "Unknown error";
+    toast.error(`Failed to ${context}: ${errorMessage}`);
+};
+
+const handleSuccess = (message) => {
+    console.log("Success:", message);
+    toast.success(message);
+};
 
 export default function ProjectTaskManager({ projectId }) {
     const [tasks, setTasks] = useState([]);
+    const [users, setUsers] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [taskTemplates, setTaskTemplates] = useState([]);
-    const [editingTaskId, setEditingTaskId] = useState(null);
-    const [editingHours, setEditingHours] = useState('');
+    const [showTaskForm, setShowTaskForm] = useState(false);
+    const [editingTask, setEditingTask] = useState(null);
 
     useEffect(() => {
         if (projectId) {
             loadTasks();
-            loadTaskTemplates();
+            loadUsers();
         }
     }, [projectId]);
 
     const loadTasks = async () => {
         setIsLoading(true);
         try {
-            const projectTasks = await Task.filter({ project_id: projectId });
-            setTasks(projectTasks);
+            // Removed '-created_date' parameter from filter, added client-side sort
+            const taskData = await Task.filter({ project_id: projectId });
+            setTasks(taskData.sort((a, b) => new Date(b.created_date) - new Date(a.created_date)));
         } catch (error) {
-            console.error("Failed to load tasks:", error);
+            handleApiError(error, "loading tasks");
         }
         setIsLoading(false);
     };
+
+    const loadUsers = async () => {
+        try {
+            const userData = await User.list();
+            setUsers(userData);
+        } catch (error) {
+            handleApiError(error, "loading users");
+        }
+    };
     
-    const loadTaskTemplates = async () => {
+    const handleSaveTask = async (taskData) => {
         try {
-            const templates = await TaskTemplate.list();
-            setTaskTemplates(templates || []);
-        } catch (error) {
-            console.error('Error loading task templates:', error);
-        }
-    };
-
-    const handleAddFromTemplate = async (template) => {
-        if (!template) return;
-        
-        try {
-            await Task.create({
-                project_id: projectId,
-                task_name: template.name,
-                section: template.dept,
-                estimated_hours: template.default_hours,
-                is_billable: template.is_billable,
-                template_id: template.id,
-                status: 'not_started',
-                completion_percentage: 0,
-                priority: 'medium'
-            });
+            if (editingTask) {
+                await Task.update(editingTask.id, taskData);
+                handleSuccess("Task updated successfully");
+            } else {
+                await Task.create({ ...(taskData || {}), project_id: projectId });
+                handleSuccess("Task created successfully");
+            }
+            setShowTaskForm(false);
+            setEditingTask(null);
             loadTasks();
         } catch (error) {
-            console.error("Error adding task from template:", error);
-            alert("Failed to add task from template.");
+            handleApiError(error, "saving task");
         }
     };
 
-    const handleUpdateHours = async (taskId, newHours) => {
-        try {
-            await Task.update(taskId, { estimated_hours: parseFloat(newHours) || 0 });
-            setEditingTaskId(null);
-            setEditingHours('');
-            loadTasks();
-        } catch (error) {
-            console.error("Failed to update task hours:", error);
-            alert("Failed to update task hours.");
-        }
+    const handleEditTask = (task) => {
+        setEditingTask(task);
+        setShowTaskForm(true);
     };
 
-    const startEditingHours = (task) => {
-        setEditingTaskId(task.id);
-        setEditingHours(task.estimated_hours?.toString() || '0');
+    const handleDeleteTask = async (taskId) => {
+        // Changed window.confirm to confirm and single quotes
+        if (confirm('Are you sure you want to delete this task?')) {
+            try {
+                await Task.delete(taskId);
+                handleSuccess("Task deleted successfully");
+                loadTasks();
+            } catch (error) {
+                handleApiError(error, "deleting task");
+            }
+        }
     };
 
     return (
-        <Card className="mt-6 border-t pt-6">
-            <CardHeader>
-                <CardTitle>Manage Project Tasks</CardTitle>
-                <p className="text-sm text-gray-600">Tasks can only be added from templates. Click on hours to edit allocation.</p>
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Project Tasks</CardTitle>
+                <Button 
+                    onClick={() => {
+                        setEditingTask(null);
+                        setShowTaskForm(true);
+                    }}
+                    style={{ backgroundColor: '#5E0F68' }}
+                    className="hover:bg-purple-700"
+                >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Task
+                </Button>
             </CardHeader>
             <CardContent>
-                <div className="space-y-4">
-                    {/* Add from template */}
-                    <div className="flex items-center gap-3 p-4 border rounded-lg">
-                        <label className="text-sm font-medium">Add from Template</label>
-                        <Select onValueChange={(templateId) => handleAddFromTemplate(taskTemplates.find(t => t.id === templateId))}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select a task template to add..."/>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {taskTemplates.map(template => (
-                                    <SelectItem key={template.id} value={template.id}>
-                                        {template.name} ({template.dept}) - {template.default_hours}h {template.is_billable ? '(Billable)' : '(Non-billable)'}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Task list */}
-                    <div className="space-y-2">
-                        <h4 className="font-medium">Project Tasks</h4>
-                        {isLoading ? (
-                            <p>Loading tasks...</p>
-                        ) : tasks.length > 0 ? (
-                            <div className="border rounded-lg max-h-60 overflow-y-auto">
-                                {tasks.map(task => (
-                                    <div key={task.id} className="flex items-center justify-between p-3 border-b last:border-b-0 hover:bg-gray-50">
-                                        <div className="flex-1">
-                                            <p className="font-medium">{task.task_name}</p>
-                                            <div className="flex items-center gap-2 mt-1">
-                                                <Badge variant="outline" className="text-xs">
-                                                    {task.section}
-                                                </Badge>
-                                                <Badge variant={task.is_billable ? "default" : "secondary"} className="text-xs">
-                                                    {task.is_billable ? "Billable" : "Non-billable"}
-                                                </Badge>
-                                                <span className="text-xs text-gray-500">
-                                                    {task.status.replace('_', ' ')}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {editingTaskId === task.id ? (
-                                                <div className="flex items-center gap-2">
-                                                    <Input
-                                                        type="number"
-                                                        value={editingHours}
-                                                        onChange={(e) => setEditingHours(e.target.value)}
-                                                        className="w-20 h-8"
-                                                        step="0.5"
-                                                    />
-                                                    <Button size="sm" onClick={() => handleUpdateHours(task.id, editingHours)}>
-                                                        Save
-                                                    </Button>
-                                                    <Button size="sm" variant="outline" onClick={() => setEditingTaskId(null)}>
-                                                        Cancel
-                                                    </Button>
-                                                </div>
-                                            ) : (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => startEditingHours(task)}
-                                                    className="flex items-center gap-1"
-                                                >
-                                                    <span className="font-mono">{task.estimated_hours || 0}h</span>
-                                                    <Edit2 className="w-3 h-3" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-gray-500 p-4 text-center border rounded-lg">No tasks found for this project. Add tasks from templates above.</p>
-                        )}
-                    </div>
-                </div>
+                {/* Replaced Tabs with direct TaskList */}
+                <TaskList
+                  tasks={tasks}
+                  users={users}
+                  isLoading={isLoading}
+                  onEdit={handleEditTask}
+                  onDelete={handleDeleteTask}
+                />
             </CardContent>
+
+            {showTaskForm && (
+                <TaskForm
+                    task={editingTask}
+                    users={users}
+                    onSave={handleSaveTask}
+                    onCancel={() => { setShowTaskForm(false); setEditingTask(null); }}
+                />
+            )}
+            {/* ToastContainer removed as sonner is used now, and typically handled at a higher level */}
         </Card>
     );
 }

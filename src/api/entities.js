@@ -57,6 +57,12 @@ export const UserCrosswalk = base44.entities.UserCrosswalk;
 
 export const ClientCrosswalk = base44.entities.ClientCrosswalk;
 
+export const AnalyticsSetting = base44.entities.AnalyticsSetting;
+
+export const TOEReview = base44.entities.TOEReview;
+
+export const DashboardSettings = base44.entities.DashboardSettings;
+
 
 
 // auth sdk:
