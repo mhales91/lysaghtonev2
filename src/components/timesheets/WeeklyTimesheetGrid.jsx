@@ -394,9 +394,9 @@ const WeeklyTimesheetGrid = forwardRef(({
                                             />
                                         </td>
                                         <td className="p-2">
-                                            <div className="font-semibold text-gray-800">{row.project?.job_number} - {row.project?.project_name}</div>
+                                            <div className="font-semibold text-gray-800">{row.project?.description || 'N/A'} - {row.project?.name}</div>
                                             <div className="text-sm text-purple-700">{row.task?.task_name}</div>
-                                            <div className="text-xs text-gray-500">{row.client?.company_name}</div>
+                                            <div className="text-xs text-gray-500">{row.client?.name}</div>
                                         </td>
                                         {row.dailyEntries.map((cell, dayIndex) => (
                                             <td key={dayIndex} className="p-2 w-[100px] relative">

@@ -122,7 +122,7 @@ export default function TOEList({
   const filteredTOEs = toes.filter(toe => {
     const matchesSearch = !searchTerm || 
       toe.project_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getClient(toe.client_id)?.company_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      getClient(toe.client_id)?.name?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || toe.status === statusFilter;
     const matchesFolder = !selectedFolder || toe.folder_id === selectedFolder;
@@ -278,7 +278,7 @@ export default function TOEList({
                        )}
                     </div>
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p><strong>Client:</strong> {client?.company_name || 'Unknown Client'}</p>
+                      <p><strong>Client:</strong> {client?.name || 'Unknown Client'}</p>
                       <p><strong>Version:</strong> {toe.version}</p>
                       {toe.total_fee_with_gst && (
                         <p><strong>Total Fee:</strong> ${toe.total_fee_with_gst.toLocaleString()}</p>
@@ -338,9 +338,11 @@ export default function TOEList({
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-red-600" onClick={() => onDelete(toe.id)}>
-                        <Trash2 className="w-4 h-4 mr-2" /> Delete
-                      </DropdownMenuItem>
+                      {toe.status !== 'signed' && (
+                        <DropdownMenuItem className="text-red-600" onClick={() => onDelete(toe.id)}>
+                          <Trash2 className="w-4 h-4 mr-2" /> Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>

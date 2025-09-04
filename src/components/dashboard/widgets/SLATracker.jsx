@@ -39,7 +39,7 @@ export default function SLATracker({ clients, toes, users, viewLevel, currentUse
         ...c,
         type: 'CRM',
         stage: c.crm_stage,
-        name: c.company_name,
+        name: c.name,
         assignee: c.lead_pm
       })),
       ...toes.filter(t => t.status !== 'signed').map(t => ({

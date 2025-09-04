@@ -241,7 +241,7 @@ export default function ProjectPortfolio({ projects, timeEntries, users, viewLev
                     }}
                   >
                     <TableCell className="font-medium text-xs">
-                      <div className="truncate font-semibold text-gray-800">{project.job_number} - {project.project_name}</div>
+                      <div className="truncate font-semibold text-gray-800">{project.job_number || 'N/A'} - {project.project_name}</div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <Badge variant="outline" className={`text-xs capitalize ${getStatusColor(project.status)}`}>
                           {project.status.replace('_', ' ')}

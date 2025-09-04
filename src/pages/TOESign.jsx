@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { TOESignature, TOE, Client } from '@/api/entities';
+import { TOE, Client } from '@/api/entities';
+import { handleSignature } from '@/api/signature-functions';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, CheckCircle, PenTool, Building2, Phone, Mail, MapPin, Download, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import SignatureModal from '../components/toe/SignatureModal';
-import { generateTOEPDF } from '@/api/functions';
+import { generateTOEPDFClient } from '@/api/pdf-generator';
 
 /* ---------- Robust downloader helpers (handles many shapes) ---------- */
 async function runFunctionAndDownloadPDF(runFn, body, fileName) {
@@ -157,14 +158,14 @@ export default function TOESign() {
           return;
         }
 
-        const signatureRecords = await TOESignature.filter({ share_token: token });
-        if (!signatureRecords || signatureRecords.length === 0) {
+        const result = await handleSignature('get', { share_token: token });
+        if (!result.success || !result.signature) {
           setError('Invalid token or TOE not found');
           setIsLoading(false);
           return;
         }
 
-        const sigRecord = signatureRecords[0];
+        const sigRecord = result.signature;
         setSignatureRecord(sigRecord);
         if (sigRecord?.client_signature) { // Initialize isSigned based on loaded record
           setIsSigned(true);
@@ -173,9 +174,16 @@ export default function TOESign() {
         const toeRecord = await TOE.get(sigRecord.toe_id);
         setToe(toeRecord);
 
-        const clientRecord = await Client.get(toeRecord.client_id);
-        setClient(clientRecord);
-        setClientName(clientRecord.contact_person || '');
+        // Only load client if client_id exists
+        if (toeRecord.client_id) {
+          const clientRecord = await Client.get(toeRecord.client_id);
+          setClient(clientRecord);
+          setClientName(clientRecord.contact_person || '');
+        } else {
+          // Handle case where TOE has no client assigned
+          setClient(null);
+          setClientName('');
+        }
       } catch (err) {
         console.error('Error loading TOE:', err);
         setError('Failed to load Terms of Engagement');
@@ -207,14 +215,16 @@ export default function TOESign() {
         hour12: false // Use 24-hour format
       });
 
-      await TOESignature.update(signatureRecord.id, {
-        client_signature: signatureData,
-        client_signer_name: clientName,
-        client_signer_title: clientTitle,
-        client_signed_date: nzSignedDateString,
-        fully_executed: true, // Always true after client signs
-        ip_address: window.navigator.userAgent // Using user agent as a simple tracking mechanism
+      const result = await handleSignature('create', {
+        toe_id: toe.id,
+        signature_data: signatureData,
+        signer_name: clientName,
+        signer_type: 'client'
       });
+
+      if (!result.success) {
+        throw new Error('Failed to save client signature');
+      }
 
       // Update TOE status
       await TOE.update(toe.id, {
@@ -224,8 +234,8 @@ export default function TOESign() {
       });
 
       // Refetch the updated records to reflect changes in UI
-      const updatedSigRecord = await TOESignature.get(signatureRecord.id);
-      setSignatureRecord(updatedSigRecord);
+      const updatedResult = await handleSignature('get', { toe_id: toe.id });
+      setSignatureRecord(updatedResult.signature);
 
       const updatedToeRecord = await TOE.get(toe.id);
       setToe(updatedToeRecord);
@@ -260,13 +270,13 @@ export default function TOESign() {
         total_fee_with_gst: toe.total_fee_with_gst,
         assumptions: toe.assumptions,
         exclusions: toe.exclusions,
-        client: {
+        client: client ? {
           company_name: client.company_name,
           contact_person: client.contact_person,
           email: client.email,
           phone: client.phone,
           address: client.address,
-        },
+        } : null,
         signatureRecord: isCurrentlySigned ? {
           client_signature: signatureRecord?.client_signature || null,
           client_signed_date: signatureRecord?.client_signed_date || null,
@@ -280,7 +290,7 @@ export default function TOESign() {
       };
 
       await runFunctionAndDownloadPDF(
-        generateTOEPDF,
+        generateTOEPDFClient,
         pdfPayload,
         `${toe.project_title || 'TOE'}-${isCurrentlySigned ? 'Signed' : 'Draft'}.pdf`
       );
@@ -565,41 +575,55 @@ export default function TOESign() {
 
           {/* RIGHT: sidebar */}
           <aside className="md:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  Client Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <h3 className="font-semibold text-lg">{client.company_name}</h3>
-                  <p className="text-gray-600">{client.contact_person}</p>
-                </div>
-                <div className="grid md:grid-cols-1 gap-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-gray-400" />
-                    <span>{client.email}</span>
+            {client ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5" />
+                    Client Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <h3 className="font-semibold text-lg">{client.company_name}</h3>
+                    <p className="text-gray-600">{client.contact_person}</p>
                   </div>
-                  {client.phone && (
+                  <div className="grid md:grid-cols-1 gap-4 text-sm">
                     <div className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-gray-400" />
-                      <span>{client.phone}</span>
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span>{client.email}</span>
                     </div>
-                  )}
-                  {client.address && (
-                    <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div>
-                        {client.address.street && <div>{client.address.street}</div>}
-                        {client.address.city && <div>{client.address.city} {client.address.postcode}</div>}
+                    {client.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span>{client.phone}</span>
                       </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    )}
+                    {client.address && (
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <div>
+                          {client.address.street && <div>{client.address.street}</div>}
+                          {client.address.city && <div>{client.address.city} {client.address.postcode}</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5" />
+                    Client Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-500 italic">No client information available</p>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

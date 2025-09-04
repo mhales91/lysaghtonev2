@@ -6,25 +6,14 @@ import { format, startOfWeek, eachDayOfInterval, addDays, isSameDay, subWeeks, a
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TimeEntry, User } from '@/api/entities';
+import { supabase } from '@/lib/supabase-client';
 
-export default function WeeklyTimesheetHours({ isLoading: dashboardLoading }) {
+export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, currentUser }) {
   const [displayWeek, setDisplayWeek] = useState(new Date());
   const [timeEntries, setTimeEntries] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load current user and initial data
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const user = await User.me();
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error loading user:', error);
-      }
-    };
-    loadUser();
-  }, []);
+  // No longer need to load user - it's passed as prop
 
   // Load time entries for the display week
   useEffect(() => {
@@ -39,12 +28,20 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading }) {
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-        const entries = await TimeEntry.filter({
-          user_email: currentUser.email,
-          date: { $gte: weekStartStr, $lte: weekEndStr }
-        });
+        // Use direct Supabase client for time entries filtering due to range operator issues
+        const { data: entries, error: entriesError } = await supabase
+          .from('time_entry')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .gte('date', weekStartStr)
+          .lte('date', weekEndStr);
         
-        setTimeEntries(entries || []);
+        if (entriesError) {
+          console.error('Error loading time entries:', entriesError);
+          setTimeEntries([]);
+        } else {
+          setTimeEntries(entries || []);
+        }
       } catch (error) {
         console.error('Error loading time entries for week:', error);
       } finally {

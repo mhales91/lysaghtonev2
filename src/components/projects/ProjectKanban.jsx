@@ -24,7 +24,7 @@ export default function ProjectKanban({ projects, clients, onStatusChange }) {
     setBoardData(newBoardData);
   }, [projects]);
   
-  const getClientName = (clientId) => clients.find(c => c.id === clientId)?.company_name || 'N/A';
+  const getClientName = (clientId) => clients.find(c => c.id === clientId)?.name || 'N/A';
 
   const onDragEnd = (result) => {
     const { source, destination, draggableId } = result;
@@ -58,7 +58,7 @@ export default function ProjectKanban({ projects, clients, onStatusChange }) {
                         >
                           <Card className="bg-white">
                             <CardContent className="p-3">
-                              <p className="font-semibold text-sm mb-2">{project.project_name}</p>
+                              <p className="font-semibold text-sm mb-2">{project.name}</p>
                               <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
                                 <Building2 className="w-3 h-3"/>
                                 <span>{getClientName(project.client_id)}</span>

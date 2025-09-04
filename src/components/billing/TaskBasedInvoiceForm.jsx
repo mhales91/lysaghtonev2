@@ -82,7 +82,7 @@ export default function TaskBasedInvoiceForm({
           id: entry.task_id,
           name: entry.task_name || 'Unknown Task',
           project_id: entry.project_id,
-          project_name: projects.find(p => p.id === entry.project_id)?.project_name || 'Unknown Project',
+          project_name: projects.find(p => p.id === entry.project_id)?.name || 'Unknown Project',
           time_entries: [],
           total_time: 0,
           calculated_amount: 0,
@@ -145,7 +145,7 @@ export default function TaskBasedInvoiceForm({
             id: item.task_id || `task-${Object.keys(taskGroupsMap).length}`, // Use original task ID or generate one
             name: item.description?.includes(':') ? item.description.split(':')[1].trim() : item.description || 'Unknown Task',
             project_id: invoice.project_ids?.[0] || '', // Assuming project_ids has relevant data
-            project_name: projects.find(p => invoice.project_ids?.includes(p.id))?.project_name || 'Unknown Project',
+            project_name: projects.find(p => invoice.project_ids?.includes(p.id))?.name || 'Unknown Project',
             time_entries: [], // Initialize empty, will be populated by loadTimeEntriesForInvoice
             total_time: 0,
             calculated_amount: 0, // This will be the original amount before any write-off/on
@@ -277,7 +277,7 @@ export default function TaskBasedInvoiceForm({
       line_items: [
         ...tasks.filter(t => t.is_billable).map(task => ({
           task_id: task.id,
-          description: `${task.project_name}: ${task.name}`,
+          description: `${task.project_name || 'Unknown Project'}: ${task.name}`,
           hours: task.total_time,
           rate: task.total_time > 0 ? (task.fixed_price / task.total_time) : 0,
           amount: task.fixed_price, // Billed amount
@@ -541,7 +541,7 @@ export default function TaskBasedInvoiceForm({
               <div>
                 <Label>Client</Label>
                 {/* Client selection is read-only if preselected or in edit mode */}
-                <p className="font-semibold">{clients.find(c => c.id === formData.client_id)?.company_name || 'N/A'}</p>
+                <p className="font-semibold">{clients.find(c => c.id === formData.client_id)?.name || 'N/A'}</p>
               </div>
               <div>
                 <Label htmlFor="date">Invoice Date</Label>
@@ -609,7 +609,7 @@ export default function TaskBasedInvoiceForm({
                           </TableCell>
                           <TableCell>
                             <div>
-                              <div className="font-medium">{task.project_name}</div>
+                              <div className="font-medium">{task.project_name || 'Unknown Project'}</div>
                               <Input
                                 value={task.name}
                                 onChange={(e) => handleTaskChange(index, 'name', e.target.value)}
@@ -867,7 +867,7 @@ export default function TaskBasedInvoiceForm({
                     (task.time_entries?.length > 0 || Math.abs(task.calculated_amount - task.fixed_price) > 0.01) && (
                       <Card key={task.id || taskIndex} className="mb-4">
                         <CardHeader>
-                          <CardTitle className="text-md">{task.project_name}: {task.name}</CardTitle>
+                          <CardTitle className="text-md">{task.project_name || 'Unknown Project'}: {task.name}</CardTitle>
                           <div className="flex gap-2 flex-wrap">
                             <Badge variant="outline">
                               {task.total_time.toFixed(2)} hours

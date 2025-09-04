@@ -130,7 +130,7 @@ export default function TimeEntryForm({ entry, currentUser, onSave, onCancel }) 
 
   // Filter projects based on search
   const filteredProjects = allProjects.filter(project => 
-    project.project_name?.toLowerCase().includes(projectSearch.toLowerCase()) ||
+    project.name?.toLowerCase().includes(projectSearch.toLowerCase()) ||
     project.client_id?.toLowerCase().includes(projectSearch.toLowerCase())
   );
 
@@ -212,7 +212,7 @@ export default function TimeEntryForm({ entry, currentUser, onSave, onCancel }) 
                     {filteredProjects.map(project => (
                       <SelectItem key={project.id} value={project.id}>
                         <div className="flex flex-col">
-                          <span className="font-medium">{project.project_name}</span>
+                          <span className="font-medium">{project.name}</span>
                           <span className="text-xs text-gray-500">
                             Status: {project.status} | Manager: {project.project_manager || 'Unassigned'}
                           </span>
@@ -275,7 +275,7 @@ export default function TimeEntryForm({ entry, currentUser, onSave, onCancel }) 
                       <h4 className="font-semibold text-blue-800">Selected Project</h4>
                       <Badge variant="outline">{getSelectedProject().status}</Badge>
                     </div>
-                    <p className="text-sm text-blue-700">{getSelectedProject().project_name}</p>
+                    <p className="text-sm text-blue-700">{getSelectedProject().name}</p>
                     {getSelectedTask() && (
                       <div className="border-t border-blue-200 pt-2 mt-2">
                         <h5 className="font-medium text-blue-800">Selected Task</h5>

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Invoice, TimeEntry, Project, Client, User } from "@/api/entities";
+import { supabase } from '@/lib/supabase-client';
 import { Button } from "@/components/ui/button";
 import { Plus, Receipt, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";

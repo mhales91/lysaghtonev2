@@ -13,7 +13,7 @@ export default function AddTaskModal({ projects, tasks, onAddTask, onClose }) {
     const projectOptions = useMemo(() => {
         return projects.map(project => ({
             ...project,
-            label: `${project.job_number || 'N/A'} - ${project.project_name}`,
+            label: `${project.description || 'N/A'} - ${project.name}`,
             value: project.id,
         }));
     }, [projects]);
@@ -60,7 +60,7 @@ export default function AddTaskModal({ projects, tasks, onAddTask, onClose }) {
             <Card className="w-full max-w-lg">
                 <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle>
-                        {step === 1 ? 'Select Job' : `Select Task from ${selectedProject?.project_name}`}
+                        {step === 1 ? 'Select Job' : `Select Task from ${selectedProject?.name}`}
                     </CardTitle>
                     <Button variant="ghost" size="icon" onClick={onClose}>
                         <X className="w-4 h-4" />
@@ -138,7 +138,7 @@ export default function AddTaskModal({ projects, tasks, onAddTask, onClose }) {
                                 <div className="p-3 bg-gray-100 rounded-md">
                                     <p className="font-semibold">Selected: {selectedTask.task_name}</p>
                                     <p className="text-sm text-gray-600">
-                                        From: {selectedProject.job_number} - {selectedProject.project_name}
+                                        From: {selectedProject.description || 'N/A'} - {selectedProject.name}
                                     </p>
                                 </div>
                             )}

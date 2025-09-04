@@ -71,15 +71,15 @@ export default function GlobalSearch() {
       // Search projects
       const allProjects = await Project.list('-created_date', 200);
       const projectResults = allProjects.filter(project => 
-        project.project_name?.toLowerCase().includes(searchTerm) ||
-        project.job_number?.toString().includes(searchTerm) ||
+        project.name?.toLowerCase().includes(searchTerm) ||
+        project.description?.toString().includes(searchTerm) ||
         project.legacy_job_number?.toLowerCase().includes(searchTerm)
       ).slice(0, 5);
 
       // Search clients
       const allClients = await Client.list('-created_date', 100);
       const clientResults = allClients.filter(client => 
-        client.company_name?.toLowerCase().includes(searchTerm) ||
+        client.name?.toLowerCase().includes(searchTerm) ||
         client.contact_person?.toLowerCase().includes(searchTerm)
       ).slice(0, 5);
 
@@ -189,9 +189,9 @@ export default function GlobalSearch() {
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{project.project_name}</div>
+                              <div className="font-medium truncate">{project.name}</div>
                               <div className="text-sm text-muted-foreground">
-                                Job #{project.job_number || project.legacy_job_number}
+                                {project.description || project.legacy_job_number || 'N/A'}
                               </div>
                             </div>
                             <Badge variant="outline" className="ml-2">
@@ -220,7 +220,7 @@ export default function GlobalSearch() {
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate">{client.company_name}</div>
+                              <div className="font-medium truncate">{client.name}</div>
                               <div className="text-sm text-muted-foreground">
                                 {client.contact_person}
                               </div>

@@ -48,7 +48,7 @@ export default function MonthlyDrillDown({ allData, dateRange }) {
             monthInvoices.forEach(invoice => {
                 const client = clients.find(c => c.id === invoice.client_id);
                 if(client) {
-                    clientTotals[client.company_name] = (clientTotals[client.company_name] || 0) + invoice.total_amount;
+                    clientTotals[client.name] = (clientTotals[client.name] || 0) + invoice.total_amount;
                 }
             });
             const topClients = Object.entries(clientTotals).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 10);
@@ -58,7 +58,7 @@ export default function MonthlyDrillDown({ allData, dateRange }) {
                 invoice.project_ids.forEach(pid => {
                     const project = projects.find(p => p.id === pid);
                     if(project) {
-                        const jobName = `${project.job_number || ''}: ${project.project_name}`;
+                        const jobName = `${project.description || ''}: ${project.name}`;
                         jobTotals[jobName] = (jobTotals[jobName] || 0) + invoice.total_amount / (invoice.project_ids.length || 1);
                     }
                 })
@@ -74,7 +74,7 @@ export default function MonthlyDrillDown({ allData, dateRange }) {
                     invoice.project_ids.forEach(pid => {
                         const project = projects.find(p => p.id === pid);
                         if(project) {
-                            const jobName = project.project_name;
+                            const jobName = project.name;
                             writeOffsByJob[jobName] = (writeOffsByJob[jobName] || 0) + amount / (invoice.project_ids.length || 1);
                         }
                     });

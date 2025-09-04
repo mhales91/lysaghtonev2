@@ -1,0 +1,7 @@
+external_id,project_status,label,id,created_date,updated_date,created_by_id,created_by,is_sample
+"00000000-0000-0000-0000-000000000001","not_started","Not Started","68a55cf23096b1fe9abbb25a","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
+"00000000-0000-0000-0000-000000000002","active","Active","68a55cf23096b1fe9abbb25b","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
+"00000000-0000-0000-0000-000000000003","on_hold","On Hold","68a55cf23096b1fe9abbb25c","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
+"00000000-0000-0000-0000-000000000004","completed","Completed","68a55cf23096b1fe9abbb25d","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
+"00000000-0000-0000-0000-000000000005","cancelled","Cancelled","68a55cf23096b1fe9abbb25e","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
+"00000000-0000-0000-0000-000000000006","active","Unknown Status","68a55cf23096b1fe9abbb25f","2025-08-20T05:28:18.252000","2025-08-20T05:28:18.252000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""

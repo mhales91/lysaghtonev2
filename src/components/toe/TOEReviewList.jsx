@@ -42,7 +42,7 @@ export default function TOEReviewList({ reviews, toes, clients, isLoading, onRev
                         <CardContent className="p-4 flex items-center justify-between">
                             <div className="flex-1">
                                 <p className="font-semibold">{toe.project_title}</p>
-                                <p className="text-sm text-gray-600">For: {client?.company_name || 'N/A'}</p>
+                                <p className="text-sm text-gray-600">For: {client?.name || 'N/A'}</p>
                                 <p className="text-xs text-gray-500 mt-1">
                                     Requested by {review.requester_email} &bull; {formatDistanceToNow(requestedAt, { addSuffix: true })}
                                 </p>

@@ -108,7 +108,7 @@ export default function LeadsTOELayer({ currentUser, contextualData, toes, isLoa
                   <div key={project.id} className="p-3 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-start mb-2">
                       <div className="text-sm font-medium text-gray-900 truncate flex-1">
-                        {project.project_name}
+                        {project.name}
                       </div>
                       <Badge className={`text-xs ${
                         project.status === 'active' ? 'bg-green-100 text-green-800' :

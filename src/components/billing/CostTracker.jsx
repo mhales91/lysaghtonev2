@@ -144,8 +144,8 @@ export default function CostTracker({ project, onClose }) {
         <CardHeader className="bg-gray-800 text-white">
             <div className="flex justify-between items-center">
                 <div>
-                    <CardTitle className="text-xl">Cost & Invoice Tracking Summary - {project.job_number}</CardTitle>
-                    <p className="text-gray-300 mt-1">{project.project_name}</p>
+                    <CardTitle className="text-xl">Cost & Invoice Tracking Summary - {project.description || 'N/A'}</CardTitle>
+                    <p className="text-gray-300 mt-1">{project.name}</p>
                 </div>
                 <div className="text-right">
                     <p className="text-sm">Client: {project.client_name}</p>

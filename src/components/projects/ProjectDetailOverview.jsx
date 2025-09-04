@@ -32,7 +32,7 @@ export default function ProjectDetailOverview({ project, client, projectManager 
       </CardHeader>
       <CardContent>
         <div className="grid md:grid-cols-3 gap-6">
-            <InfoField label="Client">{client?.company_name}</InfoField>
+            <InfoField label="Client">{client?.name}</InfoField>
             <InfoField label="Project Manager">{projectManager?.full_name}</InfoField>
             <InfoField label="Status">{getStatusBadge(project.status)}</InfoField>
 

@@ -30,7 +30,7 @@ export default function TimesheetGrid({
 }) {
   const getProjectName = (projectId) => {
     const project = (projects || []).find(p => p.id === projectId);
-    return project?.project_name || 'Unknown Project';
+    return project?.name || 'Unknown Project';
   };
 
   const getTaskName = (taskId) => {

@@ -87,14 +87,20 @@ export default function TOEManager() {
         };
 
         if (editingTOE) {
+            console.log('Updating TOE with ID:', editingTOE.id);
+            console.log('TOE data being saved:', toeData);
             savedToe = await TOE.update(editingTOE.id, toeData);
             historyEntry.action = "Updated";
         } else {
+            console.log('Creating new TOE with data:', toeData);
             savedToe = await TOE.create(toeData);
             historyEntry.action = "Created";
         }
         
         // Add history
+        if (!savedToe) {
+            throw new Error("Failed to save TOE - no data returned");
+        }
         const updatedHistory = [...(savedToe.history || []), historyEntry];
         
         // Handle reviews
@@ -102,8 +108,10 @@ export default function TOEManager() {
             const reviewHistory = { ...historyEntry, action: "Sent for Review", details: `Review requested from: ${reviewData.reviewers.join(', ')}`};
             updatedHistory.push(reviewHistory);
             
+            // Set status to internal_review when reviewers are selected
             await TOE.update(savedToe.id, { status: 'internal_review', history: updatedHistory });
             
+            // Create review requests for each reviewer
             for (const reviewerEmail of reviewData.reviewers) {
                 await TOEReview.create({
                     toe_id: savedToe.id,
@@ -115,7 +123,8 @@ export default function TOEManager() {
             }
             toast.success("TOE saved and sent for internal review.");
         } else {
-            await TOE.update(savedToe.id, { history: updatedHistory });
+            // If no reviewers selected, keep as draft
+            await TOE.update(savedToe.id, { status: 'draft', history: updatedHistory });
             toast.success(`TOE ${editingTOE ? 'updated' : 'created'} successfully.`);
         }
 
@@ -157,7 +166,47 @@ export default function TOEManager() {
           // Check if all reviews for this TOE are complete
           const remainingReviews = await TOEReview.filter({ toe_id: toe.id, status: 'pending' });
           if (remainingReviews.length === 0) {
-              updates.status = 'review_completed';
+              // All reviews completed - store original version and move to review_completed status
+              
+              // Get all completed reviews to check for changes
+              const completedReviews = await TOEReview.filter({ toe_id: toe.id, status: 'completed' });
+              
+              // Check if any reviews have changes
+              const reviewsWithChanges = completedReviews.filter(r => r.has_changes && r.review_data);
+              
+              if (reviewsWithChanges.length > 0) {
+                  // Store the original version before applying changes
+                  const originalVersion = {
+                      scope_of_work: toe.scope_of_work,
+                      fee_structure: toe.fee_structure,
+                      assumptions: toe.assumptions,
+                      exclusions: toe.exclusions,
+                      total_fee: toe.total_fee,
+                      total_fee_with_gst: toe.total_fee_with_gst,
+                      saved_at: new Date().toISOString(),
+                      saved_by: currentUser.email
+                  };
+                  
+                  // Store original version and move to review_completed status (not ready_to_send yet)
+                  updates.pre_review_version = originalVersion;
+                  updates.status = 'review_completed';
+                  
+                  updates.history.push({
+                      timestamp: new Date().toISOString(),
+                      user_email: currentUser.email,
+                      action: "Reviews Completed with Changes",
+                      details: `${reviewsWithChanges.length} review(s) contain changes. Original version saved. Please review and accept changes.`
+                  });
+              } else {
+                  // No changes made, move directly to ready_to_send
+                  updates.status = 'ready_to_send';
+                  updates.history.push({
+                      timestamp: new Date().toISOString(),
+                      user_email: currentUser.email,
+                      action: "All Reviews Completed",
+                      details: "All internal reviews completed with no changes. TOE is ready to send to client."
+                  });
+              }
           }
           
           await TOE.update(toe.id, updates);
@@ -191,10 +240,30 @@ export default function TOEManager() {
   };
 
   const handleSendTOE = async (toeId) => {
-    // This is a placeholder for a more complex flow (e.g., sending email)
     try {
-        await TOE.update(toeId, { status: 'sent', sent_date: new Date().toISOString() });
-        toast.success("TOE status marked as sent.");
+        const toe = await TOE.get(toeId);
+        
+        // Check if TOE is ready to send
+        if (toe.status !== 'ready_to_send') {
+            toast.error(`TOE must be in 'Ready to Send' status before sending. Current status: ${toe.status}`);
+            return;
+        }
+        
+        // Update status to sent with history
+        const historyEntry = {
+            timestamp: new Date().toISOString(),
+            user_email: currentUser.email,
+            action: "TOE Sent to Client",
+            details: "TOE has been sent to client for signature."
+        };
+        
+        await TOE.update(toeId, { 
+            status: 'sent', 
+            sent_date: new Date().toISOString(),
+            history: [...(toe.history || []), historyEntry]
+        });
+        
+        toast.success("TOE status marked as sent to client.");
         loadData();
     } catch (e) {
         console.error("Failed to mark TOE as sent:", e);
@@ -219,7 +288,7 @@ export default function TOEManager() {
             status: 'not_started',
             budget_hours: 0, 
             budget_fees: toe.total_fee_with_gst || 0,
-            billing_model: 'Fixed Fee', // Default value
+            billing_model: 'time_and_materials', // Valid value based on existing projects
             toe_id: toe.id
         };
 
@@ -236,11 +305,14 @@ export default function TOEManager() {
                 project_id: newProject.id,
                 status: 'not_started',
                 priority: template.priority || 'medium',
-                estimated_hours: template.est_hours || 0,
+                estimated_hours: template.default_hours || 0,
                 section: template.dept || 'General',
             }));
             if (newTasks.length > 0) {
-                await Task.bulkCreate(newTasks);
+                // Create tasks individually since bulkCreate doesn't exist
+                for (const taskData of newTasks) {
+                    await Task.create(taskData);
+                }
             }
         }
 
@@ -289,37 +361,44 @@ export default function TOEManager() {
 
   const handleAcceptChanges = async (toe, review) => {
     try {
-      // Store pre-review version before applying changes
-      const preReviewVersion = {
-        scope_of_work: toe.scope_of_work,
-        fee_structure: toe.fee_structure,
-        assumptions: toe.assumptions,
-        exclusions: toe.exclusions,
-        total_fee: toe.total_fee,
-        total_fee_with_gst: toe.total_fee_with_gst,
-        saved_at: new Date().toISOString(),
-        saved_by: currentUser.email
-      };
+      // Get the most recent review with changes
+      const completedReviews = await TOEReview.filter({ toe_id: toe.id, status: 'completed' });
+      const reviewWithChanges = completedReviews
+          .filter(r => r.has_changes && r.review_data)
+          .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
 
+      if (!reviewWithChanges) {
+        toast.error("No review changes found to accept.");
+        return;
+      }
+
+      // Apply the review changes to the TOE
+      const reviewData = reviewWithChanges.review_data;
       const updates = {
-        ...review.review_data,
+        scope_of_work: reviewData.scope_of_work || toe.scope_of_work,
+        fee_structure: reviewData.fee_structure || toe.fee_structure,
+        assumptions: reviewData.assumptions || toe.assumptions,
+        exclusions: reviewData.exclusions || toe.exclusions,
+        total_fee: reviewData.total_fee || toe.total_fee,
+        total_fee_with_gst: reviewData.total_fee_with_gst || toe.total_fee_with_gst,
         status: 'ready_to_send', // Ready to sign and send
-        pre_review_version: preReviewVersion,
         history: [
           ...(toe.history || []),
           {
             timestamp: new Date().toISOString(),
             user_email: currentUser.email,
             action: "Review Changes Accepted",
-            details: `Changes from reviewer ${review.reviewer_email} were accepted. TOE is ready to sign and send.`
+            details: `Changes from review by ${reviewWithChanges.reviewer_email} were accepted. TOE is ready to sign and send.`
           }
         ]
       };
       
-      const updatedToe = await TOE.update(toe.id, updates);
+      await TOE.update(toe.id, updates);
       
-      // Archive the review
-      await TOEReview.update(review.id, { status: 'archived' });
+      // Archive all completed reviews for this TOE
+      for (const completedReview of completedReviews) {
+        await TOEReview.update(completedReview.id, { status: 'archived' });
+      }
       
       toast.success("Review changes accepted! TOE is ready to sign and send.");
       
@@ -328,11 +407,6 @@ export default function TOEManager() {
       
       // Reload data to get the updated TOE
       await loadData();
-      
-      // Auto-open the TOE wizard for final review and signing
-      const refreshedToe = await TOE.get(toe.id); // Fetch the latest version of the TOE
-      setEditingTOE(refreshedToe);
-      setShowWizard(true);
       
     } catch (e) {
       console.error("Failed to accept changes:", e);

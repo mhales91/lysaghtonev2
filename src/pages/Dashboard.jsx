@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { startOfMonth, endOfMonth } from 'date-fns'; // Import date-fns utilities
+import { supabase } from '@/lib/supabase-client';
 
 // Import all widgets
 import WeeklyTimesheetHours from "../components/dashboard/widgets/WeeklyTimesheetHours";
@@ -151,6 +152,7 @@ export default function Dashboard() {
       filteredTimeEntries = filteredTimeEntries.filter(te => te.user_email === email);
       filteredProjects = filteredProjects.filter(p => p.project_manager === email);
       filteredUsers = allUsers.filter(u => u.email === email);
+      filteredClients = clients.filter(c => c.lead_pm === email);
       filteredToes = filteredToes.filter(t => t.created_by === email);
     } else if (viewLevel === 'manager') {
       // Manager sees their department's data
@@ -283,6 +285,7 @@ export default function Dashboard() {
                 <WeeklyTimesheetHours 
                   timeEntries={contextualData.timeEntries}
                   isLoading={isLoading}
+                  currentUser={loggedInUser}
                 />
               </div>
             )}

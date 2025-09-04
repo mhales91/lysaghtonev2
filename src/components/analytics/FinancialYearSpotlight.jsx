@@ -53,10 +53,10 @@ export default function FinancialYearSpotlight({ data, monthlyBudgets }) {
         invoices.forEach(invoice => {
             const client = clients.find(c => c.id === invoice.client_id);
             if (client) {
-                if (!clientTotals[client.company_name]) {
-                    clientTotals[client.company_name] = 0;
+                if (!clientTotals[client.name]) {
+                    clientTotals[client.name] = 0;
                 }
-                clientTotals[client.company_name] += invoice.total_amount || 0; // Add || 0 for robustness
+                clientTotals[client.name] += invoice.total_amount || 0; // Add || 0 for robustness
             }
         });
 

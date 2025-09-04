@@ -1,0 +1,23 @@
+{
+  "name": "lysaght-consultants",
+  "version": "1.0.0",
+  "buildDate": "2025-09-04T01:17:22.943Z",
+  "files": {
+    "dist/": "Static files for web server deployment",
+    ".env.production.template": "Environment variables template",
+    "DEPLOYMENT.md": "Deployment guide"
+  },
+  "requirements": {
+    "webServer": "Apache, Nginx, or similar",
+    "database": "Supabase instance at http://134.199.146.249:8000",
+    "ssl": "Recommended for production"
+  },
+  "features": [
+    "TOE Management (Create, Review, Sign)",
+    "Project Creation from Signed TOEs",
+    "Sequential Job Numbering",
+    "PDF Generation with Professional Styling",
+    "User Authentication",
+    "Data Import and Management"
+  ]
+}

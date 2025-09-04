@@ -89,7 +89,7 @@ export default function WIPSheet({ onCreateInvoice, timeEntries, projects, clien
         const client = clientData.find(c => c.id === project.client_id);
         if (!client) return;
         
-        const clientName = client.company_name;
+        const clientName = client.name;
         
         if (!clientWIP[clientName]) {
           clientWIP[clientName] = 0;
@@ -127,9 +127,9 @@ export default function WIPSheet({ onCreateInvoice, timeEntries, projects, clien
           
           projectWIP[projectId] = {
             id: projectId,
-            jobNumber: project.job_number || 'N/A',
-            jobName: project.project_name || 'Unknown Project',
-            clientName: client?.company_name || 'Unknown Client',
+            jobNumber: project.description || 'N/A',
+            jobName: project.name || 'Unknown Project',
+            clientName: client?.name || 'Unknown Client',
             time: 0,
             costs: 0, // Direct costs only
             deposits: 0,
@@ -356,7 +356,7 @@ export default function WIPSheet({ onCreateInvoice, timeEntries, projects, clien
                   <SelectItem value="all">All Clients</SelectItem>
                   {clients.map(client => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.company_name}
+                      {client.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

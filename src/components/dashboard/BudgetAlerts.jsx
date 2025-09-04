@@ -42,7 +42,7 @@ export default function BudgetAlerts({ alerts, isLoading }) {
                 <Link to={createPageUrl(`Projects?id=${project.id}`)} key={project.id}>
                   <div className="p-3 border-l-4 border-orange-400 bg-orange-50 rounded hover:bg-orange-100 transition-colors">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-gray-900 text-sm">{project.project_name}</h4>
+                      <h4 className="font-semibold text-gray-900 text-sm">{project.name}</h4>
                       <Badge className={alert.color}>
                         {alert.level}
                       </Badge>

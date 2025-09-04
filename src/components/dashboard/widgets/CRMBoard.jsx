@@ -227,10 +227,14 @@ export default function CRMBoard({ clients, projects, users, viewLevel, currentU
   if (viewLevel === 'director') {
     const currentDept = departments[currentDepartmentIndex];
 
-    const deptUsers = users.filter(u => u.department === currentDept);
-    const deptLeads = leads.filter(lead =>
-      deptUsers.some(user => user.email === lead.lead_pm)
-    );
+    // If no departments are defined, show all leads
+    let deptLeads = leads;
+    if (departments.length > 0 && currentDept) {
+      const deptUsers = users.filter(u => u.department === currentDept);
+      deptLeads = leads.filter(lead =>
+        deptUsers.some(user => user.email === lead.lead_pm) || lead.lead_pm === null || lead.lead_pm === undefined
+      );
+    }
 
     const stageCounts = CRM_STAGES.reduce((acc, stage) => {
       acc[stage.key] = deptLeads.filter(lead => lead.crm_stage === stage.key).length;
@@ -299,13 +303,28 @@ export default function CRMBoard({ clients, projects, users, viewLevel, currentU
     }
   };
 
+  // Calculate stage counts for non-director view
+  const stageCounts = CRM_STAGES.reduce((acc, stage) => {
+    acc[stage.key] = leads.filter(lead => lead.crm_stage === stage.key).length;
+    return acc;
+  }, {});
+
   return (
     <Card className="h-full rounded-xl shadow-sm border-slate-200">
       <CardHeader>
         <CardTitle className="text-base font-medium">CRM Pipeline</CardTitle>
+        {/* Add counts display for non-director view */}
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          {CRM_STAGES.map(stage => (
+            <div key={stage.key} className="text-center p-2 bg-gray-50 rounded-lg border">
+              <div className="text-2xl font-bold text-purple-600">{stageCounts[stage.key]}</div>
+              <div className="text-xs text-gray-600 mt-1">{stage.label}</div>
+            </div>
+          ))}
+        </div>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[300px] pr-3">
+        <ScrollArea className="h-[250px] pr-3">
           <div className="space-y-3">
             {leads.length > 0 ? leads.map(lead => {
               const assignedUser = users.find(u => u.email === lead.lead_pm);

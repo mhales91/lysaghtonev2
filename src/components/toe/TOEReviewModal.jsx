@@ -306,7 +306,7 @@ export default function TOEReviewModal({ toe, client, review, onClose, onSubmit 
             const prompt = `Please review this Terms of Engagement document and provide suggestions for improvement:
 
 Project: ${toe.project_title}
-Client: ${client?.company_name}
+Client: ${client?.name}
 Client Type: ${client?.tags?.join(', ') || 'General'}
 
 Scope of Work:
@@ -408,7 +408,7 @@ Format your response as structured suggestions, not as replacement content.`;
                         <div>
                             <DialogTitle>Review TOE: {toe.project_title}</DialogTitle>
                             <p className="text-sm text-gray-600 mt-1">
-                                For client: {client?.company_name || 'N/A'}. Please review the details and provide your feedback.
+                                For client: {client?.name || 'N/A'}. Please review the details and provide your feedback.
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -474,12 +474,12 @@ Format your response as structured suggestions, not as replacement content.`;
                                     <div className="space-y-4">
                                         <h4 className="font-medium">Scope Library</h4>
                                         <div className="space-y-2 max-h-80 overflow-y-auto">
-                                            {libraryItems.filter(item => item.category === 'scope' && item.is_active).map(item => (
+                                            {libraryItems.filter(item => item.category === 'scope').map(item => (
                                                 <div 
                                                     key={item.id} 
                                                     className={`p-3 border rounded-lg ${showOriginalContent ? 'cursor-not-allowed opacity-50' : 'hover:bg-gray-50 cursor-pointer'}`} 
                                                     onClick={showOriginalContent ? undefined : () => addLibraryItemToField(item, 'scope_of_work')}>
-                                                    <h5 className="font-medium text-sm">{item.title}</h5>
+                                                    <h5 className="font-medium text-sm">{item.name}</h5>
                                                     <p className="text-xs text-gray-600 mt-1">{item.content.substring(0, 100)}{item.content.length > 100 ? '...' : ''}</p>
                                                     {item.tags && item.tags.length > 0 && (
                                                         <div className="flex gap-1 mt-2">
@@ -685,12 +685,12 @@ Format your response as structured suggestions, not as replacement content.`;
                                     <div className="space-y-4">
                                         <h4 className="font-medium">Assumptions Library</h4>
                                         <div className="space-y-2 max-h-40 overflow-y-auto">
-                                            {libraryItems.filter(item => item.category === 'assumption' && item.is_active).map(item => (
+                                            {libraryItems.filter(item => item.category === 'assumption').map(item => (
                                                 <div 
                                                     key={item.id} 
                                                     className={`p-2 border rounded ${showOriginalContent ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-gray-50'}`} 
                                                     onClick={showOriginalContent ? undefined : () => addLibraryItemToField(item, 'assumptions')}>
-                                                    <p className="text-sm font-medium">{item.title}</p>
+                                                    <p className="text-sm font-medium">{item.name}</p>
                                                     <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                                                 </div>
                                             ))}
@@ -721,12 +721,12 @@ Format your response as structured suggestions, not as replacement content.`;
                                     <div className="space-y-4">
                                         <h4 className="font-medium">Exclusions Library</h4>
                                         <div className="space-y-2 max-h-40 overflow-y-auto">
-                                            {libraryItems.filter(item => item.category === 'exclusion' && item.is_active).map(item => (
+                                            {libraryItems.filter(item => item.category === 'exclusion').map(item => (
                                                 <div 
                                                     key={item.id} 
                                                     className={`p-2 border rounded ${showOriginalContent ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-gray-50'}`} 
                                                     onClick={showOriginalContent ? undefined : () => addLibraryItemToField(item, 'exclusions')}>
-                                                    <p className="text-sm font-medium">{item.title}</p>
+                                                    <p className="text-sm font-medium">{item.name}</p>
                                                     <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                                                 </div>
                                             ))}

@@ -203,7 +203,7 @@ export const generateTOEHTMLForPrint = (toe, client, signatureRecord = null, com
           <div style="flex: 1; min-width: 280px; margin-right: 20px;">
             <h3 style="margin-top: 0; color: #5E0F68;">Project Details</h3>
             <p><strong>Project:</strong> ${toe.project_title}</p>
-            <p><strong>Client:</strong> ${client?.company_name || 'Unknown Client'}</p>
+            <p><strong>Client:</strong> ${client?.name || 'Unknown Client'}</p>
             <p><strong>Contact:</strong> ${client?.contact_person || ''}</p>
             <p><strong>Email:</strong> ${client?.email || ''}</p>
           </div>
@@ -310,7 +310,7 @@ export const generateTOEHTMLForPrint = (toe, client, signatureRecord = null, com
         </div>
 
         <div class="signature-box">
-          <h3 style="color: #5E0F68; margin-top: 0;">${client?.company_name || 'Client'}</h3>
+          <h3 style="color: #5E0F68; margin-top: 0;">${client?.name || 'Client'}</h3>
           ${signatureRecord?.client_signature ? `
             <img src="${signatureRecord.client_signature}" alt="Client Signature" class="signature-image" />
             <div style="border-top: 1px solid #333; margin-top: 20px; padding-top: 10px;">

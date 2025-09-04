@@ -33,8 +33,8 @@ export default function ReadyToInvoice({ timeEntries, projects, clients, isLoadi
           return (
             <div key={projectId} className="flex items-center justify-between p-4 border rounded-lg">
               <div>
-                <p className="font-semibold">{project.project_name}</p>
-                <p className="text-sm text-gray-500">{client?.company_name}</p>
+                <p className="font-semibold">{project.name}</p>
+                <p className="text-sm text-gray-500">{client?.name}</p>
               </div>
               <div className="flex items-center gap-6">
                 <div>

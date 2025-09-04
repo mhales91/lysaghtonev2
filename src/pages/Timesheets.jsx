@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { TimeEntry, Project, Task, User, Client } from "@/api/entities";
+import { supabase } from '@/lib/supabase-client';
 import { Button } from "@/components/ui/button";
 import { Save, ChevronsUpDown } from "lucide-react";
 import { format, startOfWeek, endOfWeek } from 'date-fns';
@@ -32,7 +33,7 @@ export default function Timesheets() {
 
       const [entriesData, projectsData, tasksData, clientsData] = await Promise.all([
         TimeEntry.filter({
-            user_email: user.email,
+            user_id: user.id,
             date: { $gte: weekStart, $lte: weekEnd }
         }),
         Project.list(),

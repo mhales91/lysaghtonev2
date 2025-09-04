@@ -61,7 +61,7 @@ export default function ProjectsLayer({ currentUser, contextualData, isLoading, 
 
   const getClientName = (clientId) => {
     const client = contextualData.clients.find(c => c.id === clientId);
-    return client?.company_name || 'Unknown Client';
+    return client?.name || 'Unknown Client';
   };
 
   return (
@@ -91,10 +91,10 @@ export default function ProjectsLayer({ currentUser, contextualData, isLoading, 
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <div className="text-sm font-medium text-gray-900 truncate">
-                          {project.project_name}
+                          {project.name}
                         </div>
                         <div className="text-xs text-gray-500">
-                          #{project.job_number} • {getClientName(project.client_id)}
+                          {project.description || 'N/A'} • {getClientName(project.client_id)}
                         </div>
                       </div>
                       <Badge className={`text-xs ${

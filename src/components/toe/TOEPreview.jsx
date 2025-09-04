@@ -26,7 +26,7 @@ export default function TOEPreview({ toe, clients, onClose }) {
         assumptions: toe.assumptions,
         exclusions: toe.exclusions,
         client: {
-          company_name: client.company_name,
+          name: client.name,
           contact_person: client.contact_person,
           email: client.email,
           phone: client.phone,

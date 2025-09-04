@@ -15,7 +15,7 @@ import { LoadingButton } from "@/components/ui/loading-states";
 
 export default function ProjectForm({ project, clients, users, onSave, onCancel }) {
   const [formData, setFormData] = useState({
-    project_name: '',
+    name: '',
     client_id: '',
     project_manager: '',
     office: 'Bay of Plenty',
@@ -38,7 +38,7 @@ export default function ProjectForm({ project, clients, users, onSave, onCancel 
   useEffect(() => {
     if (project) {
       setFormData({
-        project_name: project.project_name || '',
+        name: project.name || '',
         client_id: project.client_id || '',
         project_manager: project.project_manager || '',
         office: project.office || 'Bay of Plenty',
@@ -72,8 +72,8 @@ export default function ProjectForm({ project, clients, users, onSave, onCancel 
   const validateForm = () => {
     const errors = {};
     
-    if (!validateProjectName(formData.project_name)) {
-      errors.project_name = 'Project name must be 2-200 characters long';
+    if (!validateProjectName(formData.name)) {
+      errors.name = 'Project name must be 2-200 characters long';
     }
     
     if (!formData.client_id) {
@@ -187,11 +187,11 @@ export default function ProjectForm({ project, clients, users, onSave, onCancel 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
-              {renderField('project_name', 'Project Name *', 
+              {renderField('name', 'Project Name *', 
                 <Input
-                  id="project_name"
-                  value={formData.project_name}
-                  onChange={(e) => handleChange('project_name', e.target.value)}
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleChange('name', e.target.value)}
                   placeholder="Enter project name"
                   maxLength={200}
                 />
@@ -205,7 +205,7 @@ export default function ProjectForm({ project, clients, users, onSave, onCancel 
                   <SelectContent>
                     {clients.map(client => (
                       <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
+                        {client.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

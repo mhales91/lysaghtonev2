@@ -180,8 +180,8 @@ export default function TimeLayer({ currentUser, contextualData, isLoading, view
               {contextualData.projects.slice(0, 4).map(project => (
                 <div key={project.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div>
-                    <div className="text-sm font-medium text-gray-900 truncate">{project.project_name}</div>
-                    <div className="text-xs text-gray-500">#{project.job_number}</div>
+                    <div className="text-sm font-medium text-gray-900 truncate">{project.name}</div>
+                    <div className="text-xs text-gray-500">{project.description || 'N/A'}</div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={`w-3 h-3 rounded-full ${

@@ -66,7 +66,7 @@ export default function ProjectTOETab({ project }) {
                       <div>
                         <span className="text-gray-600">Client:</span>
                         <span className="ml-2 font-medium">
-                          {client?.company_name || 'N/A'}
+                          {client?.name || 'N/A'}
                         </span>
                       </div>
                       <div>

@@ -226,10 +226,14 @@ export default function TOEBoard({ toes, users, viewLevel, currentUser, departme
   if (viewLevel === 'director') {
     const currentDept = departments[currentDepartmentIndex];
 
-    const deptUsers = users.filter(u => u.department === currentDept);
-    const deptToes = activeToes.filter(toe =>
-      deptUsers.some(user => user.email === toe.created_by)
-    );
+    // If no departments are defined, show all TOEs
+    let deptToes = activeToes;
+    if (departments.length > 0 && currentDept) {
+      const deptUsers = users.filter(u => u.department === currentDept);
+      deptToes = activeToes.filter(toe =>
+        deptUsers.some(user => user.email === toe.created_by) || toe.created_by === null || toe.created_by === undefined
+      );
+    }
 
     const stageCounts = TOE_STAGES.reduce((acc, stage) => {
       acc[stage.key] = deptToes.filter(toe => toe.status === stage.key).length;
@@ -281,13 +285,28 @@ export default function TOEBoard({ toes, users, viewLevel, currentUser, departme
     navigate(createPageUrl(`TOEManager?toeId=${toe.id}`));
   };
 
+  // Calculate stage counts for non-director view
+  const stageCounts = TOE_STAGES.reduce((acc, stage) => {
+    acc[stage.key] = activeToes.filter(toe => toe.status === stage.key).length;
+    return acc;
+  }, {});
+
   return (
     <Card className="h-full rounded-xl shadow-sm border-slate-200">
       <CardHeader>
         <CardTitle className="text-base font-medium">TOE Board</CardTitle>
+        {/* Add counts display for non-director view */}
+        <div className="grid grid-cols-4 gap-2 mt-3">
+          {TOE_STAGES.map(stage => (
+            <div key={stage.key} className="text-center p-2 bg-gray-50 rounded-lg border">
+              <div className="text-2xl font-bold text-green-600">{stageCounts[stage.key]}</div>
+              <div className="text-xs text-gray-600 mt-1">{stage.label}</div>
+            </div>
+          ))}
+        </div>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[300px] pr-3">
+        <ScrollArea className="h-[250px] pr-3">
           <div className="space-y-3">
             {activeToes.length > 0 ? activeToes.map(toe => {
               const assignedUser = users.find(u => u.email === toe.created_by);

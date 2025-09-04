@@ -204,7 +204,7 @@ export default function InvoiceForm({ invoice, clients, projects, preselectedEnt
 
     const lineItems = includedEntries.map(entry => {
       const project = projects.find(p => p.id === entry.project_id);
-      const projectName = project?.project_name || 'Unknown Project';
+      const projectName = project?.name || 'Unknown Project';
       
       return {
         task_id: entry.task_id,
@@ -349,7 +349,7 @@ export default function InvoiceForm({ invoice, clients, projects, preselectedEnt
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <Label>Client</Label>
-                <p className="font-semibold">{clients.find(c => c.id === formData.client_id)?.company_name || 'N/A'}</p>
+                <p className="font-semibold">{clients.find(c => c.id === formData.client_id)?.name || 'N/A'}</p>
               </div>
               <div>
                 <Label htmlFor="date">Invoice Date</Label>

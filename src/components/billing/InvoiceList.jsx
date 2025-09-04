@@ -71,9 +71,9 @@ export default function InvoiceList({
                   </div>
                   
                   <div className="text-sm text-gray-600 space-y-1">
-                    <p><strong>Client:</strong> {client?.company_name || 'Unknown'}</p>
+                    <p><strong>Client:</strong> {client?.name || 'Unknown'}</p>
                     {project && (
-                      <p><strong>Project:</strong> {project.job_number} - {project.project_name}</p>
+                      <p><strong>Project:</strong> {project.description || 'N/A'} - {project.name}</p>
                     )}
                     <p><strong>Created:</strong> {invoice.created_date ? format(new Date(invoice.created_date), 'PPP') : 'N/A'}</p>
                     {invoice.due_date && (

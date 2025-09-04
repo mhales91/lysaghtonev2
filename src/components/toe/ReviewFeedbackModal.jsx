@@ -10,17 +10,36 @@ import { formatCurrency } from '../utils/formatter';
 export default function ReviewFeedbackModal({ toe, reviews, onClose, onAccept, onDiscard }) {
   if (!toe || !reviews || reviews.length === 0) return null;
   
-  // For simplicity, we'll work with the first completed review. 
-  // A more complex implementation could merge or tabulate multiple reviews.
-  const review = reviews[0]; 
-  const originalData = {
+  // Get the most recent review with changes
+  const reviewWithChanges = reviews
+    .filter(r => r.has_changes && r.review_data)
+    .sort((a, b) => new Date(b.completed_at) - new Date(a.completed_at))[0];
+  
+  if (!reviewWithChanges) {
+    return (
+      <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>No Review Changes Found</DialogTitle>
+          </DialogHeader>
+          <p>No review changes were found for this TOE.</p>
+          <DialogFooter>
+            <Button onClick={onClose}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+  
+  // Use the original version stored in pre_review_version, or fallback to current TOE data
+  const originalData = toe.pre_review_version || {
     scope_of_work: toe.scope_of_work || '',
     assumptions: toe.assumptions || '',
     exclusions: toe.exclusions || '',
     fee_structure: toe.fee_structure || [],
     total_fee_with_gst: toe.total_fee_with_gst || 0
   };
-  const reviewedData = review.review_data || {};
+  const reviewedData = reviewWithChanges.review_data || {};
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -28,18 +47,18 @@ export default function ReviewFeedbackModal({ toe, reviews, onClose, onAccept, o
         <DialogHeader>
           <DialogTitle>Review Feedback for: {toe.project_title}</DialogTitle>
           <p className="text-sm text-gray-500">
-            Feedback from: {review.reviewer_email}. Review the changes below and choose to accept or discard them.
+            Feedback from: {reviewWithChanges.reviewer_email}. Review the changes below and choose to accept or discard them.
           </p>
         </DialogHeader>
 
         <div className="flex-grow overflow-y-auto p-4 space-y-6">
           {/* Change Summary */}
-          {review.changes_made && review.changes_made.length > 0 && (
+          {reviewWithChanges.changes_made && reviewWithChanges.changes_made.length > 0 && (
             <Card>
               <CardContent className="p-4">
                 <h3 className="font-semibold mb-2">Change Summary</h3>
                 <ul className="space-y-2">
-                  {review.changes_made.map(change => (
+                  {reviewWithChanges.changes_made.map(change => (
                     <li key={change.id} className="text-sm flex items-center">
                       <AlertCircle className="w-4 h-4 mr-2 text-yellow-600" />
                       {change.text}
@@ -51,11 +70,11 @@ export default function ReviewFeedbackModal({ toe, reviews, onClose, onAccept, o
           )}
 
           {/* Comments */}
-          {review.comments && (
+          {reviewWithChanges.comments && (
             <Card>
               <CardContent className="p-4">
                 <h3 className="font-semibold mb-2">Reviewer's Comments</h3>
-                <p className="text-sm p-3 bg-gray-50 rounded whitespace-pre-wrap">{review.comments}</p>
+                <p className="text-sm p-3 bg-gray-50 rounded whitespace-pre-wrap">{reviewWithChanges.comments}</p>
               </CardContent>
             </Card>
           )}
@@ -150,7 +169,7 @@ export default function ReviewFeedbackModal({ toe, reviews, onClose, onAccept, o
              <Button 
                 style={{ backgroundColor: '#16a34a' }} 
                 className="hover:bg-green-700 text-white"
-                onClick={() => onAccept(toe, review)}
+                onClick={() => onAccept(toe, reviewWithChanges)}
              >
                <Check className="w-4 h-4 mr-2" />
                Accept Changes

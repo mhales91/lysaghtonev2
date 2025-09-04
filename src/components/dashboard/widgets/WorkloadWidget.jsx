@@ -61,7 +61,7 @@ export default function WorkloadWidget({ users, projects, timeEntries, viewLevel
         const workloadScore = Math.min(100, (userProjects.length * 15) + (userHours / 40 * 60));
         
         const projectBreakdown = userProjects.map(project => ({
-          name: project.project_name,
+          name: project.name,
           percentage: userProjects.length > 0 ? (1 / userProjects.length * 100) : 0
         }));
 

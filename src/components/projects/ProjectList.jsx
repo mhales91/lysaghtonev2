@@ -99,7 +99,7 @@ export default function ProjectList({
                   aria-label="Select row"
                 />
               </TableCell>
-              <TableCell className="font-medium">{project.job_number}</TableCell>
+              <TableCell className="font-medium">{project.job_number || 'N/A'}</TableCell>
               <TableCell>
                 <Link to={createPageUrl(`ProjectDetail?id=${project.id}`)} className="font-medium text-purple-600 hover:underline">
                   {project.project_name}

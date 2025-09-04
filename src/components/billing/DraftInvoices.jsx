@@ -16,12 +16,12 @@ export default function DraftInvoices({ timeEntries, projects, clients, invoices
 
   const getClientName = (clientId) => {
     const client = (clients || []).find(c => c.id === clientId);
-    return client?.company_name || 'Unknown Client';
+    return client?.name || 'Unknown Client';
   };
 
   const getProjectName = (projectId) => {
     const project = (projects || []).find(p => p.id === projectId);
-    return project?.project_name || 'Unknown Project';
+    return project?.name || 'Unknown Project';
   };
 
   // Group unbilled time entries by project and task first
@@ -104,7 +104,7 @@ export default function DraftInvoices({ timeEntries, projects, clients, invoices
 
   if (searchTerm) {
     wipProjects = wipProjects.filter(({ project }) => {
-      const projectName = project?.project_name?.toLowerCase() || '';
+      const projectName = project?.name?.toLowerCase() || '';
       const clientName = getClientName(project?.client_id).toLowerCase();
       const searchLower = searchTerm.toLowerCase();
       return projectName.includes(searchLower) || clientName.includes(searchLower);
@@ -181,7 +181,7 @@ export default function DraftInvoices({ timeEntries, projects, clients, invoices
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold">
-                      {projectGroup.project?.job_number} - {getProjectName(projectGroup.project?.id)}
+                      {projectGroup.project?.description || 'N/A'} - {getProjectName(projectGroup.project?.id)}
                     </h3>
                     <p className="text-sm text-gray-600">
                       Client: {getClientName(projectGroup.project?.client_id)}
@@ -312,9 +312,9 @@ export default function DraftInvoices({ timeEntries, projects, clients, invoices
                     </div>
                     
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p><strong>Client:</strong> {client?.company_name || 'Unknown'}</p>
+                      <p><strong>Client:</strong> {client?.name || 'Unknown'}</p>
                       {project && (
-                        <p><strong>Project:</strong> {project.job_number} - {project.project_name}</p>
+                        <p><strong>Project:</strong> {project.description || 'N/A'} - {project.name}</p>
                       )}
                       <p><strong>Created:</strong> {invoice.created_date ? format(new Date(invoice.created_date), 'PPP') : 'N/A'}</p>
                       {invoice.due_date && (

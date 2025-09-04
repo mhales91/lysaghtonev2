@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { InvokeLLM } from "@/api/integrations";
 import { TagLibrary, CompanySettings, TOESignature, TaskTemplate, Client, User, TOELibraryItem } from "@/api/entities";
+import { handleSignature } from "@/api/signature-functions";
 import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, FileDown, Share, Edit2, UserCheck } from "lucide-react";
 
 import CostCalculator from "./CostCalculator";
@@ -63,18 +64,20 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
 
   const loadData = async () => {
     try {
-      const [tags, settings, templates, usersData, library] = await Promise.all([
+      const [tags, settings, templates, usersData, library, clientsData] = await Promise.all([
         TagLibrary.list(),
         CompanySettings.list(),
         TaskTemplate.list(),
         User.list(),
-        TOELibraryItem.list() // Load library items
+        TOELibraryItem.list(), // Load library items
+        Client.list() // Load clients
       ]);
       setSuggestedTags(tags.slice(0, 10));
       setCompanySettings(settings[0] || {});
       setTaskTemplates(templates || []);
       setAllUsers(usersData || []);
       setLibraryItems(library || []);
+      setAllClients(clientsData || []); // Set clients from database
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -97,8 +100,8 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const loadSignatureRecord = async (toeId) => {
     setIsSignatureLoading(true);
     try {
-      const records = await TOESignature.filter({ toe_id: toeId });
-      setLysaghtSignatureRecord(records[0] || null);
+      const result = await handleSignature('get', { toe_id: toeId });
+      setLysaghtSignatureRecord(result.signature);
     } catch (error) {
       console.error("Failed to load Lysaght signature record:", error);
       setLysaghtSignatureRecord(null);
@@ -109,20 +112,13 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   
   const handleSaveLysaghtSignature = async (signatureData) => {
     try {
-      if (lysaghtSignatureRecord) {
-        await TOESignature.update(lysaghtSignatureRecord.id, {
-          lysaght_signature: signatureData,
-          lysaght_signed_date: new Date().toISOString()
-        });
-      } else {
-        const shareToken = Math.random().toString(36).substring(2, 15);
-        await TOESignature.create({
-          toe_id: toe.id,
-          share_token: shareToken,
-          lysaght_signature: signatureData,
-          lysaght_signed_date: new Date().toISOString()
-        });
-      }
+      const result = await handleSignature('create', {
+        toe_id: toe.id,
+        signature_data: signatureData,
+        signer_name: 'Lysaght Staff', // You might want to get this from the current user
+        signer_type: 'lysaght'
+      });
+      
       setShowSignatureModal(false);
       loadSignatureRecord(toe.id);
     } catch (error) {
@@ -295,17 +291,31 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     }
 
     // Re-fetch latest signature record to ensure we have the most up-to-date data
-    const records = await TOESignature.filter({ toe_id: toe.id });
-    const currentSigRecord = records[0];
-
-    if (!currentSigRecord?.lysaght_signature) {
-      alert("Lysaght signature is required before generating a share link. Please provide a signature in the 'Review' step.");
-      setCurrentStep(6);
-      return;
-    }
-    
     try {
-      const shareUrl = `${window.location.origin}/TOESign?token=${currentSigRecord.share_token}`;
+      const result = await handleSignature('get', { toe_id: toe.id });
+      const currentSigRecord = result.signature;
+
+      if (!currentSigRecord?.lysaght_signature) {
+        alert("Lysaght signature is required before generating a share link. Please provide a signature in the 'Review' step.");
+        setCurrentStep(6);
+        return;
+      }
+      
+      // Generate or get share token
+      let shareToken = currentSigRecord.share_token;
+      if (!shareToken) {
+        // Create a new share token
+        shareToken = crypto.randomUUID();
+        await handleSignature('create', {
+          toe_id: toe.id,
+          signature_data: currentSigRecord.lysaght_signature,
+          signer_name: currentSigRecord.lysaght_signer_name || 'Lysaght Staff',
+          signer_type: 'lysaght',
+          share_token: shareToken
+        });
+      }
+      
+      const shareUrl = `${window.location.origin}/TOESign?token=${shareToken}`;
       await navigator.clipboard.writeText(shareUrl);
       alert('Share link copied to clipboard!');
     } catch (error) {
@@ -487,7 +497,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                       <SelectContent>
                         {allClients.map(client => (
                           <SelectItem key={client.id} value={client.id}>
-                            {client.company_name}
+                            {client.company_name || client.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -515,7 +525,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                   <CardContent className="p-4">
                     <h4 className="font-semibold text-blue-900 mb-2">Selected Client</h4>
                     <div className="text-sm text-blue-800">
-                      <p><strong>{getSelectedClient().company_name}</strong></p>
+                      <p><strong>{getSelectedClient().company_name || getSelectedClient().name}</strong></p>
                       <p>{getSelectedClient().contact_person}</p>
                       <p>{getSelectedClient().email}</p>
                       {getSelectedClient().tags && (
@@ -566,13 +576,13 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                   <div className="space-y-4">
                     <h4 className="font-medium">Scope Library</h4>
                     <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {libraryItems.filter(item => item.category === 'scope' && item.is_active).map(item => (
+                      {libraryItems.filter(item => item.category === 'scope').map(item => (
                         <div 
                           key={item.id} 
                           className={`p-3 border rounded-lg ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
                           onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'scope_of_work')}
                         >
-                          <h5 className="font-medium text-sm">{item.title}</h5>
+                          <h5 className="font-medium text-sm">{item.name}</h5>
                           <p className="text-xs text-gray-600 mt-1">{item.content.substring(0, 100)}{item.content.length > 100 ? '...' : ''}</p>
                           {item.tags && item.tags.length > 0 && (
                             <div className="flex gap-1 mt-2">
@@ -786,13 +796,13 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                   <div className="space-y-4">
                     <h4 className="font-medium">Assumptions Library</h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {libraryItems.filter(item => item.category === 'assumption' && item.is_active).map(item => (
+                      {libraryItems.filter(item => item.category === 'assumption').map(item => (
                         <div 
                           key={item.id} 
                           className={`p-2 border rounded ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
                           onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'assumptions')}
                         >
-                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="text-sm font-medium">{item.name}</p>
                           <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                         </div>
                       ))}
@@ -802,13 +812,13 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                   <div className="space-y-4">
                     <h4 className="font-medium">Exclusions Library</h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {libraryItems.filter(item => item.category === 'exclusion' && item.is_active).map(item => (
+                      {libraryItems.filter(item => item.category === 'exclusion').map(item => (
                         <div 
                           key={item.id} 
                           className={`p-2 border rounded ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
                           onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'exclusions')}
                         >
-                          <p className="text-sm font-medium">{item.title}</p>
+                          <p className="text-sm font-medium">{item.name}</p>
                           <p className="text-xs text-gray-600">{item.content.substring(0, 60)}{item.content.length > 60 ? '...' : ''}</p>
                         </div>
                       ))}
@@ -876,7 +886,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                       <div>
                         <span className="text-gray-600">Client:</span>
                         <span className="ml-2 font-medium">
-                          {getSelectedClient()?.company_name}
+                          {getSelectedClient()?.company_name || getSelectedClient()?.name}
                         </span>
                       </div>
                       <div>
@@ -1107,7 +1117,7 @@ const AIReviewButton = ({ toeData, client }) => {
       const prompt = `Please review this Terms of Engagement document and provide suggestions for improvement:
 
 Project: ${toeData.project_title}
-Client: ${client?.company_name}
+Client: ${client?.name}
 Client Type: ${client?.tags?.join(', ') || 'General'}
 
 Scope of Work:

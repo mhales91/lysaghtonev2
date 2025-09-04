@@ -52,7 +52,7 @@ export default function ProjectGantt({ projects, isLoading }) {
               return (
                 <div key={project.id} className="h-10 flex items-center relative text-xs">
                   <div className="w-48 absolute left-0 bg-white pr-2 truncate font-medium">
-                    {project.project_name}
+                    {project.name}
                   </div>
                   <div
                     className="h-6 bg-purple-200 rounded absolute"

@@ -1,0 +1,2 @@
+user_email,base_cost_rate,billable_rate,effective_from,effective_to,currency,is_active,id,created_date,updated_date,created_by_id,created_by,is_sample
+"mitchell@lysaght.net.nz","","200","2025-08-14","","NZD","true","689beed499d6c65e94f967d5","2025-08-13T01:48:04.378000","2025-08-14T00:53:43.593000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
