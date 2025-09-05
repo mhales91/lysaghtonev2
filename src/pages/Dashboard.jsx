@@ -316,10 +316,10 @@ export default function Dashboard() {
             )}
           </div>
 
-        {/* LEADS LAYER */}
+        {/* LEADS */}
         <div className="section-header">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Leads Layer
+            Leads
           </h2>
         </div>
         <div className="dashboard-grid mb-8">
