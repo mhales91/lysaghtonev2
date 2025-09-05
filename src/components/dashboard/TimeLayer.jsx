@@ -119,7 +119,7 @@ export default function TimeLayer({ currentUser, contextualData, isLoading, view
       <CardHeader className="pb-4">
         <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
           <Clock className="w-5 h-5 text-blue-600" />
-          TIME LAYER - {currentUser.user_role === 'Staff' ? 'YOU' : `${viewMode.toUpperCase()} VIEW`}
+          TIME - {currentUser.user_role === 'Staff' ? 'YOU' : `${viewMode.toUpperCase()} VIEW`}
         </CardTitle>
       </CardHeader>
       <CardContent>
