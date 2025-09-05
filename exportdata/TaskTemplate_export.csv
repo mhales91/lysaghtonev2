@@ -1,3 +1,0 @@
-name,dept,default_hours,is_billable,description,id,created_date,updated_date,created_by_id,created_by,is_sample
-"Admin","Admin","5","","Project Administration","6893b8b55b78f332a98ce25a","2025-08-06T20:19:01.650000","2025-08-12T20:33:13.524000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
-"Design","Engineering","5","true","","689ba11489d6c763a1aa1ba0","2025-08-12T20:16:20.615000","2025-08-12T20:34:15.199000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""

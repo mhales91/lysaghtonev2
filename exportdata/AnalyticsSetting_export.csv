@@ -1,2 +1,0 @@
-year,company_monthly_budgets,department_percentages,id,created_date,updated_date,created_by_id,created_by,is_sample
-"2025","{""apr"":650000,""may"":650000,""jun"":650000,""jul"":650000,""aug"":650000,""sep"":650000,""oct"":650000,""nov"":650000,""dec"":400000,""jan"":350000,""feb"":650000,""mar"":650000}","{""Project Management"":10,""Engineering"":40,""Surveying"":35,""Planning"":15}","68ae42a20e0f0d3b9b89fab0","2025-08-26T23:26:26.402000","2025-09-01T03:15:43.475000","689114bd8ff9b1e25eb9ba79","mitchell@lysaght.net.nz",""
