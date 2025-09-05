@@ -275,7 +275,7 @@ export default function Dashboard() {
         {/* TIME LAYER */}
         <div className="section-header">
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Time Layer
+            Time
           </h2>
         </div>
         <div className="dashboard-grid mb-8">

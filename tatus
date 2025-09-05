@@ -1,0 +1,13 @@
+[1mdiff --git a/index.html b/index.html[m
+[1mindex 579040c..d206744 100644[m
+[1m--- a/index.html[m
+[1m+++ b/index.html[m
+[36m@@ -4,7 +4,7 @@[m
+     <meta charset="UTF-8" />[m
+     <link rel="icon" type="image/svg+xml" href="https://base44.com/logo_v2.svg" />[m
+     <meta name="viewport" content="width=device-width, initial-scale=1.0" />[m
+[31m-    <title>Lysaght One - Version 2</title>[m
+[32m+[m[32m    <title>Lysaght One - Version 2 (Preview) - Updated</title>[m
+   </head>[m
+   <body>[m
+     <div id="root"></div>[m

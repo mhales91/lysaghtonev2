@@ -11,19 +11,19 @@ const WIDGET_DEFINITIONS = {
   weeklyTimesheetHours: {
     name: 'Weekly Timesheet Hours',
     description: 'Segmented bar chart showing billable vs non-billable hours',
-    layer: 'Time Layer',
+    layer: 'Time',
     required: false
   },
   yearlyBillableTracker: {
     name: 'Yearly Billable Tracker',
     description: 'Monthly percentage tracking for billable and realised time',
-    layer: 'Time Layer',
+    layer: 'Time',
     required: false
   },
   workload: {
     name: 'Workload',
     description: 'Horizontal progress bars showing workload distribution',
-    layer: 'Time Layer',
+    layer: 'Time',
     required: false
   },
   crmBoard: {
