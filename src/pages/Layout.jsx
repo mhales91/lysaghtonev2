@@ -6,6 +6,7 @@ import { createPageUrl } from "@/utils";
 import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import GlobalSearch from "@/components/layout/GlobalSearch";
+import Login from "./Login";
 import {
   LayoutDashboard,
   Users,
@@ -23,7 +24,8 @@ import {
   Sparkles,
   BookText,
   DollarSign,
-  Upload
+  Upload,
+  LogOut
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,6 +44,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { User } from '@/api/entities';
+import { supabase } from '@/lib/supabase-client';
 import { useEffect, useState } from 'react';
 import { PageLoadingSkeleton } from '@/components/ui/loading-states';
 
@@ -107,9 +110,9 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setVisibleNavItems(filteredNav);
 
       } catch (e) {
-        console.log("ProtectedLayout: Not logged in, redirecting to login...", e.message);
+        console.log("ProtectedLayout: Not logged in, showing login page...", e.message);
         setAuthError('Authentication required');
-        User.loginWithRedirect(window.location.href);
+        // Don't auto-redirect, show login page instead
       } finally {
         setIsAuthLoading(false);
       }
@@ -119,33 +122,21 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
   const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';
 
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
   if (isAuthLoading) {
     return <PageLoadingSkeleton title="Authenticating..." />;
   }
 
   if (authError) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <Card className="w-full max-w-md mx-auto">
-          <CardContent className="text-center p-8">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Building2 className="w-8 h-8 text-red-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Error</h2>
-            <p className="text-gray-600 mb-4">
-              Unable to authenticate your session. Please try logging in again.
-            </p>
-            <Button
-              onClick={() => User.loginWithRedirect(window.location.href)}
-              style={{ backgroundColor: '#5E0F68' }}
-              className="hover:bg-purple-700"
-            >
-              Sign In
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <Login />;
   }
 
   // Show pending approval screen
@@ -275,21 +266,36 @@ const ProtectedLayout = ({ children, currentPageName }) => {
             </SidebarContent>
 
             <SidebarFooter className="border-t p-6" style={{ borderColor: 'var(--lysaght-border)' }}>
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
-                  style={{ backgroundColor: 'var(--lysaght-text-light)' }}
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
+                    style={{ backgroundColor: 'var(--lysaght-text-light)' }}
+                  >
+                    {currentUser?.full_name?.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-sm truncate" style={{ color: 'var(--lysaght-text)' }}>
+                      {currentUser?.full_name}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: 'var(--lysaght-text-light)' }}>
+                      {currentUser?.email}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={handleLogout}
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start gap-2"
+                  style={{ 
+                    borderColor: 'var(--lysaght-border)',
+                    color: 'var(--lysaght-text-light)'
+                  }}
                 >
-                  {currentUser?.full_name?.substring(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--lysaght-text)' }}>
-                    {currentUser?.full_name}
-                  </p>
-                  <p className="text-xs truncate" style={{ color: 'var(--lysaght-text-light)' }}>
-                    {currentUser?.email}
-                  </p>
-                </div>
+                  <LogOut className="w-4 h-4" />
+                  Logout
+                </Button>
               </div>
             </SidebarFooter>
           </Sidebar>

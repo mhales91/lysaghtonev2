@@ -1,0 +1,5 @@
+[33m5d856ff[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Remove 'Layer' from 'Time Layer' on dashboard
+[33m67cf3b9[m Test automatic preview deployment
+[33mee2f6d5[m Test preview deployment - add (Preview) to title
+[33m6ba6ae4[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m Update app name to Lysaght One - Version 2
+[33m85a475f[m Clean up repository: Remove test files, build artifacts, and unnecessary scripts
