@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Building2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/lib/supabase-client';
+import { User } from '@/api/entities';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -122,41 +123,79 @@ const Login = () => {
     }
 
     try {
-      // For localhost development, we'll create a mock user in localStorage
-      // and add them to a pending users list that admins can see
-      const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-      
-      // Check if user already exists
-      const existingUser = pendingUsers.find(user => user.email === email.trim());
-      if (existingUser) {
-        setError('An account with this email is already pending approval.');
-        setIsLoading(false);
-        return;
+      if (isLocalhost) {
+        // For localhost development, we'll create a mock user in localStorage
+        // and add them to a pending users list that admins can see
+        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+        
+        // Check if user already exists
+        const existingUser = pendingUsers.find(user => user.email === email.trim());
+        if (existingUser) {
+          setError('An account with this email is already pending approval.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Create new pending user
+        const newPendingUser = {
+          id: Date.now().toString(), // Simple ID for localhost
+          email: email.trim(),
+          full_name: fullName.trim(),
+          password: password, // Store password for localhost authentication
+          user_role: 'Staff',
+          approval_status: 'pending',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        // Add to pending users list
+        pendingUsers.push(newPendingUser);
+        localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+
+        setError('');
+        alert('Account created successfully! Please wait for an administrator to approve your access.');
+        setIsSignUp(false);
+        setFullName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+      } else {
+        // Production: Use Supabase authentication and database
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: password,
+        });
+
+        if (signUpError) {
+          setError(signUpError.message);
+          return;
+        }
+
+        if (data.user) {
+          // Create user record in database
+          try {
+            await User.create({
+              email: email.trim(),
+              full_name: fullName.trim(),
+              user_role: 'Staff',
+              approval_status: 'pending',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+
+            setError('');
+            alert('Account created successfully! Please wait for an administrator to approve your access.');
+            setIsSignUp(false);
+            setFullName('');
+            setEmail('');
+            setPassword('');
+            setConfirmPassword('');
+          } catch (dbError) {
+            console.error('Database error:', dbError);
+            setError('Account created but there was an error saving your profile. Please contact support.');
+          }
+        }
       }
-
-      // Create new pending user
-      const newPendingUser = {
-        id: Date.now().toString(), // Simple ID for localhost
-        email: email.trim(),
-        full_name: fullName.trim(),
-        password: password, // Store password for localhost authentication
-        user_role: 'Staff',
-        approval_status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      // Add to pending users list
-      pendingUsers.push(newPendingUser);
-      localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
-
-      setError('');
-      alert('Account created successfully! Please wait for an administrator to approve your access.');
-      setIsSignUp(false);
-      setFullName('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
     } catch (err) {
       setError('Sign up failed. Please try again.');
       console.error('Sign up error:', err);
@@ -183,24 +222,22 @@ const Login = () => {
             <CardTitle className="text-center">
               {isSignUp ? 'Create Account' : 'Sign In'}
             </CardTitle>
-            {isLocalhost && (
-              <div className="text-center">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setError('');
-                    setFullName('');
-                    setEmail('');
-                    setPassword('');
-                    setConfirmPassword('');
-                  }}
-                  className="text-sm text-purple-600 hover:text-purple-500 underline"
-                >
-                  {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
-                </button>
-              </div>
-            )}
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(!isSignUp);
+                  setError('');
+                  setFullName('');
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                }}
+                className="text-sm text-purple-600 hover:text-purple-500 underline"
+              >
+                {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+              </button>
+            </div>
           </CardHeader>
           <CardContent>
             <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-6">

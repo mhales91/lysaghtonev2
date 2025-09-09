@@ -427,7 +427,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {(isAdmin || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) && (
+              {isAdmin && (
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider px-2 py-3" style={{ color: 'var(--lysaght-text-light)' }}>
                     Admin

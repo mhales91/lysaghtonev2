@@ -486,10 +486,8 @@ export default function UserManagementPage() {
         );
     }
 
-    // Role Configuration Modal for localhost only
+    // Role Configuration Modal
     if (showRoleConfig && editingRole) {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (!isLocalhost) return null;
 
         const togglePage = (page) => {
             setSelectedPages(prev => 
@@ -543,10 +541,8 @@ export default function UserManagementPage() {
         );
     }
 
-    // Dashboard Widgets Configuration Modal for localhost only
+    // Dashboard Widgets Configuration Modal
     if (showWidgetConfig && editingWidgetRole) {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (!isLocalhost) return null;
 
         const toggleWidget = (widget) => {
             setSelectedWidgets(prev => 
