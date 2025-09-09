@@ -686,30 +686,26 @@ export default function UserManagementPage() {
                             >
                                 Pending Approval ({pendingUsers.length})
                             </button>
-                            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-                                <>
-                                    <button
-                                        onClick={() => setActiveTab('roles')}
-                                        className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'roles'
-                                                ? 'border-purple-500 text-purple-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
-                                    >
-                                        Role Configuration
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('widgets')}
-                                        className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                                            activeTab === 'widgets'
-                                                ? 'border-purple-500 text-purple-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                        }`}
-                                    >
-                                        Dashboard Widgets
-                                    </button>
-                                </>
-                            )}
+                            <button
+                                onClick={() => setActiveTab('roles')}
+                                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                                    activeTab === 'roles'
+                                        ? 'border-purple-500 text-purple-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                Role Configuration
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('widgets')}
+                                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                                    activeTab === 'widgets'
+                                        ? 'border-purple-500 text-purple-600'
+                                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                }`}
+                            >
+                                Dashboard Widgets
+                            </button>
                         </nav>
                     </div>
                 </div>
