@@ -12,6 +12,14 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [fullName, setFullName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
+  // Check if we're on localhost
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -19,23 +27,139 @@ const Login = () => {
     setError('');
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password,
-      });
+      if (isLocalhost) {
+        // For localhost, check localStorage users first, then try Supabase for database users
+        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+        const approvedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
+        
+        // Check if user exists in approved users (localhost)
+        console.log('Checking localStorage users:', { approvedUsers, email: email.trim() });
+        const localUser = approvedUsers.find(user => 
+          user.email === email.trim() && user.password === password
+        );
+        
+        console.log('Found local user:', localUser);
+        
+        if (localUser) {
+          // Set user in localStorage for session management
+          localStorage.setItem('currentUser', JSON.stringify(localUser));
+          window.location.href = '/dashboard';
+          return;
+        }
+        
+        // Check if user exists in pending users
+        const pendingUser = pendingUsers.find(user => user.email === email.trim());
+        if (pendingUser) {
+          setError('Your account is pending approval. Please wait for an administrator to approve your access.');
+          return;
+        }
+        
+        // If not found in localStorage, try Supabase authentication for database users (like dev@localhost.com)
+        console.log('No localhost user found, trying Supabase authentication...');
+        try {
+          const { data, error: signInError } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password: password,
+          });
 
-      if (signInError) {
-        setError(signInError.message);
-        return;
-      }
+          if (signInError) {
+            console.log('Supabase authentication failed:', signInError);
+            setError('Invalid login credentials. Please check your email and password.');
+            return;
+          }
 
-      if (data.user) {
-        // Refresh the page to load the authenticated user
-        window.location.reload();
+          if (data.user) {
+            console.log('Supabase authentication successful:', data.user);
+            // For database users, we need to get their full user data
+            // This will be handled by the Layout component
+            window.location.href = '/dashboard';
+          }
+        } catch (supabaseError) {
+          console.log('Supabase authentication error:', supabaseError);
+          setError('Invalid login credentials. Please check your email and password.');
+          return;
+        }
+      } else {
+        // Production: Use Supabase authentication only
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password,
+        });
+
+        if (signInError) {
+          setError(signInError.message);
+          return;
+        }
+
+        if (data.user) {
+          // Redirect to dashboard after successful login
+          window.location.href = '/dashboard';
+        }
       }
     } catch (err) {
       setError('Login failed. Please check your credentials and try again.');
       console.error('Login error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // For localhost development, we'll create a mock user in localStorage
+      // and add them to a pending users list that admins can see
+      const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+      
+      // Check if user already exists
+      const existingUser = pendingUsers.find(user => user.email === email.trim());
+      if (existingUser) {
+        setError('An account with this email is already pending approval.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Create new pending user
+      const newPendingUser = {
+        id: Date.now().toString(), // Simple ID for localhost
+        email: email.trim(),
+        full_name: fullName.trim(),
+        password: password, // Store password for localhost authentication
+        user_role: 'Staff',
+        approval_status: 'pending',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Add to pending users list
+      pendingUsers.push(newPendingUser);
+      localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+
+      setError('');
+      alert('Account created successfully! Please wait for an administrator to approve your access.');
+      setIsSignUp(false);
+      setFullName('');
+      setEmail('');
+      setPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setError('Sign up failed. Please try again.');
+      console.error('Sign up error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -56,10 +180,46 @@ const Login = () => {
 
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle className="text-center">Sign In</CardTitle>
+            <CardTitle className="text-center">
+              {isSignUp ? 'Create Account' : 'Sign In'}
+            </CardTitle>
+            {isLocalhost && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(!isSignUp);
+                    setError('');
+                    setFullName('');
+                    setEmail('');
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}
+                  className="text-sm text-purple-600 hover:text-purple-500 underline"
+                >
+                  {isSignUp ? 'Already have an account? Sign in' : 'Need an account? Sign up'}
+                </button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleLogin} className="space-y-6">
+            <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-6">
+              {isSignUp && (
+                <div>
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    name="fullName"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="mt-1"
+                    placeholder="Enter your full name"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="email">Email Address</Label>
                 <Input
@@ -102,6 +262,35 @@ const Login = () => {
                 </div>
               </div>
 
+              {isSignUp && (
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      required
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm your password"
+                    />
+                    <button
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {error && (
                 <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-md">
                   {error}
@@ -114,7 +303,7 @@ const Login = () => {
                 className="w-full"
                 style={{ backgroundColor: '#5E0F68' }}
               >
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                {isLoading ? (isSignUp ? 'Creating Account...' : 'Signing In...') : (isSignUp ? 'Create Account' : 'Sign In')}
               </Button>
             </form>
           </CardContent>

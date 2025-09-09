@@ -25,7 +25,22 @@ export default function Timesheets() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const user = await User.me();
+      // Check if we're on localhost and have a localStorage user
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      let user;
+      
+      if (isLocalhost) {
+        const localUser = localStorage.getItem('currentUser');
+        if (localUser) {
+          user = JSON.parse(localUser);
+        } else {
+          // Fallback to Supabase authentication for database users
+          user = await User.me();
+        }
+      } else {
+        // Production: Use Supabase authentication
+        user = await User.me();
+      }
       setCurrentUser(user);
 
       const weekStart = format(startOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
@@ -33,7 +48,6 @@ export default function Timesheets() {
 
       const [entriesData, projectsData, tasksData, clientsData] = await Promise.all([
         TimeEntry.filter({
-            user_id: user.id,
             date: { $gte: weekStart, $lte: weekEnd }
         }),
         Project.list(),

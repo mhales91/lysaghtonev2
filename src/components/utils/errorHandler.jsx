@@ -11,6 +11,9 @@ export const handleApiError = (error, context = 'Operation') => {
   if (error?.response?.status === 429 || error?.message?.includes('rate limit')) {
     userMessage = 'Server is busy. Please try again in a moment.';
     isRateLimit = true;
+  } else if (error?.message?.includes('incomplete_details') && error?.message?.includes('max_output_tokens')) {
+    userMessage = 'The report was cut short due to length limits; retrying with optimized parameters...';
+    isRateLimit = false;
   } else if (error?.response?.status === 401) {
     userMessage = 'Your session has expired. Please refresh the page.';
   } else if (error?.response?.status === 403) {

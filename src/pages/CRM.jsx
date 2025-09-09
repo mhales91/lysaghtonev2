@@ -43,7 +43,22 @@ export default function CRM() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const me = await User.me();
+      // Check if we're on localhost and have a localStorage user
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      let me;
+      
+      if (isLocalhost) {
+        const localUser = localStorage.getItem('currentUser');
+        if (localUser) {
+          me = JSON.parse(localUser);
+        } else {
+          // Fallback to Supabase authentication for database users
+          me = await User.me();
+        }
+      } else {
+        // Production: Use Supabase authentication
+        me = await User.me();
+      }
       
       const clientData = await Client.list('-created_date');
       setClients(clientData);

@@ -59,6 +59,11 @@ export class CustomEntity {
     const fieldMappings = {
       created_date: "created_at",
       updated_date: "updated_at",
+      // Prompt table field mappings
+      title: "title",
+      prompt_text: "prompt_text", 
+      is_public: "is_public",
+      user_email: "user_email",
       // Add any other field mappings as needed
     };
     return fieldMappings[field] || field;
@@ -91,6 +96,11 @@ export class CustomEntity {
     const reverseFieldMappings = {
       created_at: "created_date",
       updated_at: "updated_date",
+      // Prompt table reverse mappings
+      title: "title",
+      prompt_text: "prompt_text",
+      is_public: "is_public", 
+      user_email: "user_email",
     };
 
     const mapObject = (obj) => {
@@ -807,6 +817,7 @@ function shouldUseServiceRole(entityName) {
     "admin",
     "audit",
     "log",
+    "prompt",
   ];
 
   return serviceRoleEntities.some((pattern) =>

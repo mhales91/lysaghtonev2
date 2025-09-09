@@ -55,8 +55,25 @@ export default function Dashboard() {
     const loadStaticData = async () => {
       // setIsLoading(true); // Already true by default
       try {
-        const user = await User.me();
-        setLoggedInUser(user);
+        // Check if we're on localhost and have a localStorage user
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        let user;
+        
+        if (isLocalhost) {
+          const localUser = localStorage.getItem('currentUser');
+          if (localUser) {
+            user = JSON.parse(localUser);
+            setLoggedInUser(user);
+          } else {
+            // Fallback to Supabase authentication for database users
+            user = await User.me();
+            setLoggedInUser(user);
+          }
+        } else {
+          // Production: Use Supabase authentication
+          user = await User.me();
+          setLoggedInUser(user);
+        }
         
         // Set default view level based on role
         const defaultLevel = user.user_role === 'Director' || user.user_role === 'Admin' ? 'director' :
@@ -200,6 +217,33 @@ export default function Dashboard() {
 
   // Check if widget is enabled for current user role
   const isWidgetEnabled = (widgetKey) => {
+    // Check if we're on localhost and have widget configurations
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (isLocalhost && loggedInUser) {
+      // For localhost, check localStorage widget configurations
+      const widgetConfigs = JSON.parse(localStorage.getItem('widgetConfigs') || '{}');
+      const userRole = loggedInUser.user_role || 'Staff';
+      const allowedWidgets = widgetConfigs[userRole] || [];
+      
+      // Map widget keys to widget names
+      const widgetKeyToName = {
+        'weeklyTimesheetHours': 'Weekly Timesheet Hours',
+        'yearlyBillableTracker': 'Yearly Performance (FYTD)',
+        'workload': 'Workload',
+        'crmBoard': 'CRM Pipeline - All Departments',
+        'toeBoard': 'TOE Board - All Departments',
+        'slaTracker': 'SLA Tracker - All Departments',
+        'projectPortfolio': 'Project Portfolio',
+        'upcomingProjects': 'Upcoming Projects',
+        'budget': 'Budget Utilisation'
+      };
+      
+      const widgetName = widgetKeyToName[widgetKey];
+      return allowedWidgets.includes(widgetName);
+    }
+    
+    // Fallback to database settings for production
     if (!dashboardSettings) return true; // Default to enabled if no settings are loaded
     
     const roleSettings = dashboardSettings.widget_permissions?.[loggedInUser?.user_role];

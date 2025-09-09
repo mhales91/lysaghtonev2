@@ -42,11 +42,27 @@ export default function ProjectsPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [projectData, clientData, taskData, me] = await Promise.all([
+      // Check if we're on localhost and have a localStorage user
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      let me;
+      
+      if (isLocalhost) {
+        const localUser = localStorage.getItem('currentUser');
+        if (localUser) {
+          me = JSON.parse(localUser);
+        } else {
+          // Fallback to Supabase authentication for database users
+          me = await User.me();
+        }
+      } else {
+        // Production: Use Supabase authentication
+        me = await User.me();
+      }
+      
+      const [projectData, clientData, taskData] = await Promise.all([
         Project.list('-created_date'),
         Client.list(),
-        Task.list(),
-        User.me()
+        Task.list()
       ]);
       setProjects(projectData);
       setClients(clientData);

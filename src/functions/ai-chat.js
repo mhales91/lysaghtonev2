@@ -33,6 +33,11 @@ function isG5Like(model) {
   return m.includes('gpt-5') || m.startsWith('o1') || m.startsWith('o3');
 }
 
+function isDeepResearchModel(model) {
+  const m = String(model || '').trim().toLowerCase();
+  return m.includes('deep-research') || m.includes('o3-deep-research') || m.includes('o4-mini-deep-research');
+}
+
 async function callOpenAI(payload) {
   const headers = {
     'Authorization': 'Bearer ' + OPENAI_API_KEY,
@@ -105,10 +110,18 @@ export default async function aiChat(req) {
 
     // Choose token param branch
     const g5 = isG5Like(model);
+    const isDR = isDeepResearchModel(model);
     const payload = { model, messages };
     let param_mode = 'none';
 
-    if (g5) {
+    if (isDR) {
+      // Deep Research models - use max_output_tokens and background
+      delete payload.max_tokens;
+      delete payload.max_completion_tokens;
+      payload.max_output_tokens = Number(process.env.DR_MAX_OUTPUT_TOKENS ?? 20000);
+      payload.background = true;
+      param_mode = 'max_output_tokens';
+    } else if (g5) {
       payload.max_completion_tokens = 500;   // GPT-5/o1/o3 style
       // no temperature for g5 family
       param_mode = 'max_completion_tokens';

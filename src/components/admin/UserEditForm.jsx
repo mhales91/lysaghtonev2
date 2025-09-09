@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X, Save, AlertTriangle, Lock, Palette } from 'lucide-react';
+import { X, Save, AlertTriangle, Lock, Palette, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const defaultColors = [
@@ -15,7 +15,7 @@ const defaultColors = [
   '#0ea5e9', '#3b82f6', '#6366f1', '#8b5cf6', '#a855f7'
 ];
 
-export default function UserEditForm({ user, isAppCreator, onSave, onCancel }) {
+export default function UserEditForm({ user, isAppCreator, onSave, onCancel, onDelete }) {
     const [formData, setFormData] = useState({
         first_name: user.first_name || '',
         last_name: user.last_name || '',
@@ -155,11 +155,28 @@ export default function UserEditForm({ user, isAppCreator, onSave, onCancel }) {
                             </div>
                         </div>
                         
-                        <div className="flex justify-end gap-2 pt-4">
-                            <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-                            <Button type="submit" style={{ backgroundColor: '#5E0F68' }}>
-                                <Save className="mr-2 h-4 w-4" /> Save Changes
-                            </Button>
+                        <div className="flex justify-between pt-4">
+                            {/* Delete button - only for localhost users */}
+                            {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && onDelete && (
+                                <Button 
+                                    type="button" 
+                                    variant="destructive" 
+                                    onClick={() => {
+                                        if (window.confirm(`Are you sure you want to delete ${user.full_name}? This action cannot be undone.`)) {
+                                            onDelete(user);
+                                        }
+                                    }}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete User
+                                </Button>
+                            )}
+                            
+                            <div className="flex gap-2 ml-auto">
+                                <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+                                <Button type="submit" style={{ backgroundColor: '#5E0F68' }}>
+                                    <Save className="mr-2 h-4 w-4" /> Save Changes
+                                </Button>
+                            </div>
                         </div>
                     </form>
                 </CardContent>

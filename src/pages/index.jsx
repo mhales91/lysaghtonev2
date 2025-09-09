@@ -107,6 +107,11 @@ function _getCurrentPage(url) {
         urlLastPart = urlLastPart.split('?')[0];
     }
 
+    // Handle special case for aiassistant -> AIAssistantManager
+    if (urlLastPart.toLowerCase() === 'aiassistant') {
+        return 'AIAssistantManager';
+    }
+
     const pageName = Object.keys(PAGES).find(page => page.toLowerCase() === urlLastPart.toLowerCase());
     return pageName || Object.keys(PAGES)[0];
 }
@@ -148,6 +153,8 @@ function PagesContent() {
                 <Route path="/LysaghtAI" element={<LysaghtAI />} />
                 
                 <Route path="/AIAssistantManager" element={<AIAssistantManager />} />
+                
+                <Route path="/aiassistant" element={<AIAssistantManager />} />
                 
                 <Route path="/PromptLibraryManager" element={<PromptLibraryManager />} />
                 

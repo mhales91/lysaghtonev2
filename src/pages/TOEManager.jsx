@@ -61,12 +61,29 @@ export default function TOEManager() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const [toeData, clientData, reviewData, userData, me] = await Promise.all([
+    
+    // Check if we're on localhost and have a localStorage user
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    let me;
+    
+    if (isLocalhost) {
+      const localUser = localStorage.getItem('currentUser');
+      if (localUser) {
+        me = JSON.parse(localUser);
+      } else {
+        // Fallback to Supabase authentication for database users
+        me = await User.me();
+      }
+    } else {
+      // Production: Use Supabase authentication
+      me = await User.me();
+    }
+    
+    const [toeData, clientData, reviewData, userData] = await Promise.all([
       TOE.list('-created_date'),
       Client.list(),
       TOEReview.list(),
-      User.list(),
-      User.me()
+      User.list()
     ]);
     setToes(toeData);
     setClients(clientData);

@@ -62,7 +62,23 @@ function ChatMessage({ message, assistantName }) {
       <div className="max-w-3xl">
         <div className="font-semibold mb-1">{isUser ? 'You' : assistantName}</div>
         <div className={`p-4 rounded-xl ${bgColor} ${message.type === 'error' ? 'bg-red-50 text-red-800 border border-red-200' : ''}`}>
-          <ReactMarkdown className="whitespace-pre-wrap">{message.content}</ReactMarkdown>
+          {/* Safely extract text content for ReactMarkdown */}
+          {(() => {
+            // message may be a string, or an object { text, raw }
+            const md =
+              typeof message.content === "string"
+                ? message.content
+                : typeof message.content?.text === "string"
+                  ? message.content.text
+                  : typeof message.content?.content === "string"
+                    ? message.content.content
+                    : "";
+
+            // Last-resort fallback to avoid react-markdown crash
+            const safe = (md && typeof md === "string") ? md : "*(no content)*";
+
+            return <ReactMarkdown className="whitespace-pre-wrap">{safe}</ReactMarkdown>;
+          })()}
 
           {message.files && message.files.length > 0 && (
             <div className="mt-3 space-y-2">

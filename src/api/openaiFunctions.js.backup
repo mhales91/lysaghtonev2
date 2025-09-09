@@ -1,0 +1,1263 @@
+// Real OpenAI API functions for localhost development
+// These make actual API calls to OpenAI instead of mock responses
+
+import Bottleneck from "bottleneck";
+
+const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+
+// Debug logging
+console.log('Environment check:');
+console.log('import.meta.env.VITE_OPENAI_API_KEY:', import.meta.env.VITE_OPENAI_API_KEY);
+console.log('OPENAI_API_KEY:', OPENAI_API_KEY);
+console.log('All env vars:', import.meta.env);
+
+// Helper function to check if model is GPT-5 like
+function isG5Like(model) {
+  const m = String(model || '').trim().toLowerCase();
+  return m.includes('gpt-5') || m.startsWith('o1') || m.startsWith('o3');
+}
+
+// Helper function to check if model is a deep research model
+function isDeepResearchModel(model) {
+  const m = String(model || '').trim().toLowerCase();
+  return m.includes('deep-research') || m.includes('o3-deep-research') || m.includes('o4-mini-deep-research');
+}
+
+// Helper function to normalize deep research model IDs to the correct dated versions
+function normalizeDeepResearchModel(model) {
+  const m = String(model || '').trim().toLowerCase();
+  if (m.includes('o3-deep-research')) {
+    return 'o3-deep-research-2025-06-26';
+  } else if (m.includes('o4-mini-deep-research')) {
+    return 'o4-mini-deep-research-2025-06-26';
+  }
+  return model; // return as-is if not a deep research model
+}
+
+// ---- Rate limit config ----
+const DEFAULT_TPM = Number(import.meta.env.VITE_OPENAI_TPM ?? 200_000);
+let avgTokensPerJob = 26_000; // seed; updated from real usage (see §3)
+const concurrencyFromTPM = () => Math.max(1, Math.floor(DEFAULT_TPM / Math.max(1000, avgTokensPerJob)));
+
+const drLimiter = new Bottleneck({
+  maxConcurrent: 1, // Cap to 1 for debugging Deep Research issues
+  minTime: 50
+});
+
+// allow live updates if avgTokensPerJob changes
+function refreshLimiter() {
+  const newMax = concurrencyFromTPM();
+  drLimiter.updateSettings?.({ maxConcurrent: newMax });
+}
+
+// Exponential backoff with jitter for 429 errors
+async function with429Backoff(fn, maxRetries = 5) {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try { 
+      return await fn(); 
+    } catch (err) {
+      const msg = String(err?.message ?? "");
+      const status = err?.status || err?.response?.status;
+      const is429 = status === 429 || msg.includes("rate limit");
+      if (!is429 || attempt >= maxRetries) throw err;
+      const wait = Math.min(15000, (2 ** attempt) * 250 + Math.random() * 250);
+      await new Promise(r => setTimeout(r, wait));
+      attempt++;
+    }
+  }
+}
+
+// Token budgeting & rolling average
+function updateTokenEMA(latestTotal) {
+  const alpha = 0.25; // EMA weight
+  avgTokensPerJob = Math.round(alpha * latestTotal + (1 - alpha) * avgTokensPerJob);
+  refreshLimiter();
+}
+
+// Utility: turn a Responses API result into a single string of markdown
+export function normalizeDeepResearchText(resp) {
+  if (!resp) return "";
+
+  // 1) SDK convenience (newer SDKs expose this)
+  if (typeof resp.output_text === "string" && resp.output_text.trim()) {
+    return resp.output_text;
+  }
+
+  // 2) Plain Responses API shape: resp.output is an array of "message" objects
+  // Each message has content: [{type: 'output_text'|'text'|..., text: '...'}, ...]
+  try {
+    const parts = (resp.output ?? [])
+      .flatMap(m => m?.content ?? [])
+      .map(c => {
+        // common shapes
+        if (typeof c?.text === "string") return c.text;
+        if (typeof c?.content === "string") return c.content;
+        if (typeof c?.arguments === "string") return c.arguments; // rare
+        // some SDKs nest as { text: { value: "..." } }
+        if (c?.text?.value) return String(c.text.value);
+        return "";
+      })
+      .filter(Boolean);
+
+    const joined = parts.join("");
+    if (joined.trim()) return joined;
+  } catch {}
+
+  // 3) Background retrieve shape sometimes nests under resp.response
+  if (resp?.response?.output_text) return String(resp.response.output_text);
+
+  // 4) Fallback: show something rather than crash
+  return "*(No text content returned; raw payload)*\n\n```json\n" +
+         JSON.stringify(resp, null, 2) + "\n```";
+}
+
+// Poll until the background job completes
+export async function waitForResponseCompletion(client, responseOrId, { intervalMs = 1200, timeoutMs = 120000 } = {}) {
+  const id = typeof responseOrId === "string" ? responseOrId : responseOrId.id;
+  const start = Date.now();
+  let resp = typeof responseOrId === "string" ? null : responseOrId;
+
+  while (true) {
+    if (!resp || resp.status === "in_progress" || resp.status === "queued") {
+      await new Promise(r => setTimeout(r, intervalMs));
+      resp = await client.responses.retrieve(id);
+    }
+
+    if (resp.status === "completed") return resp;
+
+    if (resp.status === "failed" || resp.status === "cancelled" || resp.status === "expired") {
+      throw new Error(`Deep Research job ${resp.status}: ${resp?.incomplete_details?.reason ?? "unknown"}`);
+    }
+
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Deep Research timed out while waiting for completion.");
+    }
+  }
+}
+
+// Function to explain Deep Research failure details
+function explainDRFailure(resp) {
+  const err = {
+    status: resp?.status,
+    reason: resp?.incomplete_details?.reason,
+    last_error: resp?.last_error,                // backend/tool error
+    last_error_message: resp?.last_error?.message,
+    usage: resp?.usage,
+    id: resp?.id,
+  };
+  console.warn("Deep Research failure detail:", err);
+  return err;
+}
+
+// Fallback runner for Deep Research with multiple variants
+async function runDeepResearchWithFallback(basePayload) {
+  const variants = [
+    basePayload,
+    { ...basePayload, tools: [{ type: "web_search_preview" }] },
+    { ...basePayload, tools: [] }, // let the model pick defaults
+    { ...basePayload, model: "o3-deep-research-2025-06-26" }
+  ];
+
+  let lastErr;
+  for (const p of variants) {
+    try {
+      console.log(`Trying Deep Research variant: ${p.model} with tools: ${JSON.stringify(p.tools)}`);
+      const created = await callOpenAIResponses(p);
+      
+      // Handle background polling
+      let final = created;
+      if (final?.background && final?.status && final.status !== 'completed') {
+        console.log('Deep research job started, polling for completion...');
+        let pollCount = 0;
+        const maxPolls = 50; // 50 * 1.2s = 60 seconds max
+        
+        while (final.status !== 'completed' && pollCount < maxPolls) {
+          await new Promise(r => setTimeout(r, 1200)); // 1.2 second intervals
+          final = await callOpenAIResponses({ id: final.id }, 'GET'); // retrieve by ID
+          pollCount++;
+          
+          console.log(`Poll ${pollCount}: status = ${final.status}`);
+          
+          if (final.status === 'failed' || final.status === 'cancelled' || final.status === 'expired') {
+            const detail = explainDRFailure(final);
+            console.warn(`Deep Research job ${final.status} after ${pollCount} polls:`, detail);
+            throw new Error(`Deep Research job ${final.status}: ${detail.reason || detail.last_error_message || "unknown"}`);
+          }
+        }
+        
+        if (pollCount >= maxPolls) {
+          throw new Error(`Deep Research timed out after ${maxPolls} polls (${maxPolls * 1.2}s)`);
+        }
+      }
+      
+      if (final.status === "completed") {
+        console.log(`Deep Research succeeded with variant: ${p.model}`);
+        return final;
+      }
+      
+      lastErr = explainDRFailure(final);
+      throw new Error(`Deep Research job ended with status: ${final.status}`);
+    } catch (e) {
+      console.warn(`Deep Research variant failed: ${p.model}`, e.message);
+      lastErr = e;
+    }
+  }
+  throw new Error(`Deep Research failed after fallbacks: ${lastErr?.message || "unknown"}`);
+}
+
+// Deep Research call wrapper with rate limiting
+async function callDeepResearch(payload) {
+  // enforce DR-safe defaults
+  const DR_MAX = Number(import.meta.env.VITE_DR_MAX_OUTPUT_TOKENS ?? 20000);
+  payload.background = true;
+  // Remove text.format - text output is default, extra formatters can cause errors
+  payload.max_output_tokens = Math.min(DR_MAX, payload.max_output_tokens ?? DR_MAX);
+  
+  // Normalize model ID to use correct dated version
+  payload.model = normalizeDeepResearchModel(payload.model);
+
+  // Schedule under limiter + backoff with fallback runner
+  const result = await drLimiter.schedule(() =>
+    with429Backoff(async () => {
+      // Try different tool configurations
+      const toolVariants = [
+        { ...payload, tools: [{ type: "web_search" }] },
+        { ...payload, tools: [{ type: "web_search_preview" }] },
+        { ...payload, tools: [] }, // Let model choose
+        { ...payload, tools: [{ type: "web_search" }], background: false } // Try without background
+      ];
+      
+      for (let i = 0; i < toolVariants.length; i++) {
+        const variant = toolVariants[i];
+        try {
+          console.log(`Trying Deep Research variant ${i + 1}/${toolVariants.length}:`, {
+            model: variant.model,
+            tools: variant.tools,
+            background: variant.background
+          });
+          
+          const created = await callOpenAIResponses(variant);
+          console.log('Created job response:', created);
+      
+          // Handle background polling
+          let final = created;
+          if (final?.background && final?.status && final.status !== 'completed') {
+            console.log('Deep research job started, polling for completion...');
+            let pollCount = 0;
+            const maxPolls = 30; // 30 * 1.2s = 36 seconds max per variant
+            
+            while (final.status !== 'completed' && pollCount < maxPolls) {
+              await new Promise(r => setTimeout(r, 1200)); // 1.2 second intervals
+              final = await callOpenAIResponses({ id: final.id }, 'GET'); // retrieve by ID
+              pollCount++;
+              
+              console.log(`Poll ${pollCount}: status = ${final.status}, id = ${final.id}`);
+              
+              // Log additional details every 10 polls
+              if (pollCount % 10 === 0) {
+                console.log(`Job details at poll ${pollCount}:`, {
+                  status: final.status,
+                  background: final.background,
+                  error: final.error,
+                  incomplete_details: final.incomplete_details,
+                  usage: final.usage
+                });
+              }
+              
+              if (final.status === 'failed' || final.status === 'cancelled' || final.status === 'expired') {
+                const detail = explainDRFailure(final);
+                console.warn(`Deep Research job ${final.status} after ${pollCount} polls:`, detail);
+                throw new Error(`Deep Research job ${final.status}: ${detail.reason || detail.last_error_message || "unknown"}`);
+              }
+            }
+            
+            if (pollCount >= maxPolls) {
+              console.warn(`Variant ${i + 1} timed out after ${maxPolls} polls, trying next variant...`);
+              continue; // Try next variant
+            }
+          }
+          
+          if (final.status !== "completed") {
+            const detail = explainDRFailure(final);
+            console.warn(`Variant ${i + 1} ended with status: ${final.status}, trying next variant...`);
+            continue; // Try next variant
+          }
+          
+          console.log(`Deep Research completed successfully with variant ${i + 1}`);
+          
+          // token accounting (Responses API)
+          const usage = final?.usage || final?.response?.usage;
+          const total =
+            (usage?.total_tokens) ??
+            ((usage?.input_tokens || 0) + (usage?.output_tokens || 0));
+          if (total) updateTokenEMA(total);
+          return final;
+          
+        } catch (error) {
+          console.warn(`Variant ${i + 1} failed:`, error.message);
+          if (i === toolVariants.length - 1) {
+            // Last variant failed, throw the error
+            throw error;
+          }
+          // Continue to next variant
+        }
+      }
+      
+      // All variants failed
+      throw new Error('All Deep Research variants failed');
+    })
+  );
+  
+  // Normalize the response to ensure we always return a string
+  const text = normalizeDeepResearchText(result);
+  
+  // Check for truncation and add user feedback
+  const reason = result?.incomplete_details?.reason;
+  let finalText = text;
+  
+  if (reason === "max_output_tokens") {
+    console.warn("Deep Research hit max_output_tokens; content may be incomplete.");
+    finalText = text + "\n\n---\n\n⚠️ **Note**: This response was truncated due to length limits. Consider breaking your query into smaller parts for a complete analysis.";
+  } else if (reason === "max_completion_tokens") {
+    console.warn("Deep Research hit max_completion_tokens; content may be incomplete.");
+    finalText = text + "\n\n---\n\n⚠️ **Note**: This response was truncated due to token limits. Consider rephrasing your question for a more focused response.";
+  }
+  
+  // Return a shape the UI expects (string for markdown)
+  return { 
+    text: finalText, 
+    raw: result, 
+    truncated: !!reason,
+    model_used: result?.model || payload.model // Ensure model is tracked
+  };
+}
+
+// Helper function to build OpenAI headers
+function buildOpenAIHeaders() {
+  const headers = {
+    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    'Content-Type': 'application/json'
+  };
+  return headers;
+}
+
+// Helper function to call OpenAI Chat Completions API
+async function callOpenAIChatCompletions(payload) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: buildOpenAIHeaders(),
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok) {
+    throw new Error(`OpenAI API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+  }
+  
+  return data;
+}
+
+// Helper function to call OpenAI Responses API (for deep research models)
+async function callOpenAIResponses(payload, method = 'POST') {
+  if (method === 'GET' && payload.id) {
+    // Handle polling requests
+    console.log('Polling OpenAI Responses API for job:', payload.id);
+    const response = await fetch(`https://api.openai.com/v1/responses/${payload.id}`, {
+      method: 'GET',
+      headers: buildOpenAIHeaders()
+    });
+    
+    console.log('OpenAI Responses API polling status:', response.status);
+    const data = await response.json();
+    console.log('OpenAI Responses API polling data:', data);
+    
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+    }
+    
+    return data;
+  } else {
+    // Handle create requests
+      console.log('Calling OpenAI Responses API with payload:', JSON.stringify(payload, null, 2));
+      console.log('Payload model:', payload.model);
+      console.log('Payload tools:', payload.tools);
+    
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: buildOpenAIHeaders(),
+      body: JSON.stringify(payload)
+    });
+
+    console.log('OpenAI Responses API response status:', response.status);
+    const data = await response.json();
+    console.log('OpenAI Responses API response data:', JSON.stringify(data, null, 2));
+    
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+    }
+    
+    return data;
+  }
+}
+
+// Helper function to call OpenAI Images API with GPT-Image-1
+async function callOpenAIImage(prompt, options = {}) {
+  const {
+    size = '1024x1024',
+    quality = 'high',
+
+    n = 1,
+
+    user = null
+  } = options;
+
+  console.log('Calling OpenAI Images API with GPT-Image-1:', {
+    model: 'gpt-image-1',
+    prompt: prompt,
+    size,
+    quality,
+
+    n,
+
+  });
+  
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: buildOpenAIHeaders(),
+    body: JSON.stringify({
+      model: 'gpt-image-1',
+      prompt: prompt,
+      size,
+      quality,
+      n,
+      ...(user && { user })
+    })
+  });
+
+  console.log('OpenAI Images API response status:', response.status);
+  const data = await response.json();
+  console.log('OpenAI Images API response data:', JSON.stringify(data, null, 2));
+  
+  if (!response.ok) {
+    throw new Error(`OpenAI Images API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+  }
+  
+  return data;
+}
+
+// Helper function for image editing with GPT-Image-1
+async function callOpenAIImageEdit(image, mask, prompt, options = {}) {
+  const {
+    size = '1024x1024',
+    n = 1,
+
+    user = null
+  } = options;
+
+  console.log('Calling OpenAI Image Edit API with GPT-Image-1:', {
+    model: 'gpt-image-1',
+    prompt: prompt,
+    size,
+    n,
+
+  });
+
+  const formData = new FormData();
+  formData.append('image', image);
+  if (mask) formData.append('mask', mask);
+  formData.append('prompt', prompt);
+  formData.append('model', 'gpt-image-1');
+  formData.append('size', size);
+  formData.append('n', n.toString());
+  if (user) formData.append('user', user);
+
+  const response = await fetch('https://api.openai.com/v1/images/edits', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`
+    },
+    body: formData
+  });
+
+  console.log('OpenAI Image Edit API response status:', response.status);
+  const data = await response.json();
+  console.log('OpenAI Image Edit API response data:', JSON.stringify(data, null, 2));
+  
+  if (!response.ok) {
+    throw new Error(`OpenAI Image Edit API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+  }
+  
+  return data;
+}
+
+// Helper function for image variations with GPT-Image-1
+async function callOpenAIImageVariation(image, options = {}) {
+  const {
+    size = '1024x1024',
+    n = 1,
+
+    user = null
+  } = options;
+
+  console.log('Calling OpenAI Image Variation API:', {
+    size,
+    n
+  });
+
+  const formData = new FormData();
+  formData.append('image', image);
+  formData.append('size', size);
+  formData.append('n', n.toString());
+  if (user) formData.append('user', user);
+
+  const response = await fetch('https://api.openai.com/v1/images/variations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENAI_API_KEY}`
+    },
+    body: formData
+  });
+
+  console.log('OpenAI Image Variation API response status:', response.status);
+  const data = await response.json();
+  console.log('OpenAI Image Variation API response data:', JSON.stringify(data, null, 2));
+  
+  if (!response.ok) {
+    throw new Error(`OpenAI Image Variation API error: ${response.status} - ${data.error?.message || 'Unknown error'}`);
+  }
+  
+  return data;
+}
+
+// Helper function for streaming image generation
+async function* callOpenAIImageStream(prompt, options = {}) {
+  const {
+    size = '1024x1024',
+    quality = 'high',
+
+    n = 1,
+    user = null
+  } = options;
+
+  console.log('Calling OpenAI Images API with streaming:', {
+    model: 'gpt-image-1',
+    prompt: prompt,
+    size,
+    quality,
+
+    n,
+    stream: true
+  });
+  
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: buildOpenAIHeaders(),
+    body: JSON.stringify({
+      model: 'gpt-image-1',
+      prompt: prompt,
+      size,
+      quality,
+
+      n,
+      stream: true,
+      ...(user && { user })
+    })
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`OpenAI Images API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          
+          try {
+            const parsed = JSON.parse(data);
+            yield parsed;
+          } catch (e) {
+            console.warn('Failed to parse streaming data:', data);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export const openaiAdvanced = async (params) => {
+  console.log('Real openaiAdvanced called with params:', params);
+  console.log('OPENAI_API_KEY length:', OPENAI_API_KEY ? OPENAI_API_KEY.length : 'undefined');
+
+  if (!OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env.local file.');
+  }
+
+  const { action, prompt, model, systemPrompt, history, fileUrls } = params;
+  const effectiveModel = model || 'gpt-4o';
+
+  try {
+    if (action === 'generate_image') {
+      console.log('Generating image with gpt-image-1 model...');
+      
+      // Extract image generation options from params
+      const imageOptions = {
+        size: params.size || '1024x1024',
+        quality: params.quality || 'high',
+        n: params.n || 1,
+        user: params.user || null
+      };
+      
+      const imageResponse = await callOpenAIImage(prompt, imageOptions);
+      console.log('Full image response:', JSON.stringify(imageResponse, null, 2));
+      
+      // Try different possible response formats for gpt-image-1
+      let imageUrls = [];
+      
+      // Handle multiple images if available
+      if (imageResponse.data && Array.isArray(imageResponse.data)) {
+        imageUrls = await Promise.all(imageResponse.data.map(async (item) => {
+          let url = item.url || item.b64_json || item.image_url;
+          if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+            url = `data:image/png;base64,${url}`;
+          } else if (url && url.startsWith('http')) {
+            // Use a CORS proxy to convert external URL to base64
+            try {
+              const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+              const response = await fetch(proxyUrl);
+              const blob = await response.blob();
+              const arrayBuffer = await blob.arrayBuffer();
+              const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+              url = `data:image/png;base64,${base64}`;
+            } catch (error) {
+              console.error('Error converting external URL to base64 via proxy:', error);
+              // Keep original URL as fallback
+            }
+          }
+          return url;
+        }));
+        imageUrls = imageUrls.filter(Boolean);
+      } else {
+        // Fallback to single image
+        let imageUrl = imageResponse.data?.[0]?.url || 
+                      imageResponse.data?.[0]?.b64_json || 
+                      imageResponse.url || 
+                      imageResponse.image_url;
+        
+        if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+          imageUrl = `data:image/png;base64,${imageUrl}`;
+        } else if (imageUrl && imageUrl.startsWith('http')) {
+          // Use a CORS proxy to convert external URL to base64
+          try {
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(imageUrl)}`;
+            const response = await fetch(proxyUrl);
+            const blob = await response.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+            imageUrl = `data:image/png;base64,${base64}`;
+          } catch (error) {
+            console.error('Error converting external URL to base64 via proxy:', error);
+            // Keep original URL as fallback
+          }
+        }
+        
+        if (imageUrl) {
+          imageUrls = [imageUrl];
+        }
+      }
+      
+      console.log('Extracted imageUrls:', imageUrls);
+      
+      if (imageUrls.length === 0) {
+        console.error('No image URLs found in response. Full response:', imageResponse);
+        throw new Error('No image URLs returned from OpenAI');
+      }
+
+      return {
+        success: true,
+        image_url: imageUrls[0], // Keep single image_url for backward compatibility
+        image_urls: imageUrls,   // Add array of all image URLs
+        response: `Image${imageUrls.length > 1 ? 's' : ''} generated successfully`,
+        reply: `Image${imageUrls.length > 1 ? 's' : ''} generated successfully`,
+        model_used: 'gpt-image-1',
+        size: imageOptions.size,
+        quality: imageOptions.quality,
+
+      };
+    }
+
+    if (action === 'create_variations') {
+      console.log('Creating image variations with gpt-image-1 model...');
+      
+      const imageOptions = {
+        size: params.size || '1024x1024',
+        n: params.n || 3
+      };
+      
+      const imageResponse = await callOpenAIImageVariation(params.image, imageOptions);
+      console.log('Variations response:', JSON.stringify(imageResponse, null, 2));
+      
+      // Handle multiple variations
+      let imageUrls = [];
+      if (imageResponse.data && Array.isArray(imageResponse.data)) {
+        imageUrls = imageResponse.data.map(item => {
+          let url = item.url || item.b64_json || item.image_url;
+          if (url && !url.startsWith('http') && !url.startsWith('data:')) {
+            url = `data:image/png;base64,${url}`;
+          }
+          return url;
+        }).filter(Boolean);
+      }
+      
+      if (imageUrls.length === 0) {
+        throw new Error('No variation URLs returned from OpenAI');
+      }
+
+      return {
+        success: true,
+        images: imageUrls,
+        image_url: imageUrls[0], // For backward compatibility
+        response: `Generated ${imageUrls.length} image variations successfully`,
+        reply: `Generated ${imageUrls.length} image variations successfully`,
+        model_used: 'gpt-image-1'
+      };
+    }
+
+    if (action === 'edit_image') {
+      console.log('Editing image with gpt-image-1 model...');
+      
+      const imageOptions = {
+        size: params.size || '1024x1024',
+        prompt: params.prompt
+      };
+      
+      const imageResponse = await callOpenAIImageEdit(params.image, null, params.prompt, imageOptions);
+      console.log('Edit response:', JSON.stringify(imageResponse, null, 2));
+      
+      // Handle edited image
+      let imageUrl = imageResponse.data?.[0]?.url || 
+                    imageResponse.data?.[0]?.b64_json || 
+                    imageResponse.url || 
+                    imageResponse.image_url;
+      
+      if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+        imageUrl = `data:image/png;base64,${imageUrl}`;
+      }
+      
+      if (!imageUrl) {
+        throw new Error('No edited image URL returned from OpenAI');
+      }
+
+      return {
+        success: true,
+        image_url: imageUrl,
+        response: `Image edited successfully: ${params.prompt}`,
+        reply: `Image edited successfully: ${params.prompt}`,
+        model_used: 'gpt-image-1'
+      };
+    }
+
+    if (action === 'deep_research') {
+      console.log('Starting deep research with model:', effectiveModel);
+      console.log('Model type:', typeof effectiveModel);
+      console.log('Model value:', JSON.stringify(effectiveModel));
+      console.log('isDeepResearchModel check:', isDeepResearchModel(effectiveModel));
+      
+      // For deep research, we want to use the selected model and fail clearly if not available
+      const researchModel = effectiveModel;
+      console.log('Using deep research model:', researchModel);
+      
+      // Build messages for deep research
+      const messages = [];
+      
+      // Enhanced system prompt for comprehensive research following OpenAI best practices
+      const researchSystemPrompt = `You are an expert research assistant specializing in comprehensive, multi-faceted analysis. Your role is to conduct thorough, methodical research that goes beyond surface-level information.
+
+## Research Methodology:
+1. **Initial Analysis**: Break down the research question into key components and sub-questions
+2. **Multi-Perspective Approach**: Consider different viewpoints, stakeholders, and contexts
+3. **Evidence-Based Research**: Focus on factual, verifiable information with proper sourcing
+4. **Critical Analysis**: Evaluate the reliability, relevance, and implications of findings
+5. **Synthesis**: Integrate findings into coherent, actionable insights
+6. **Limitations & Assumptions**: Clearly state what is known, unknown, and assumed
+
+## Output Structure:
+- **Executive Summary**: 2-3 sentence overview of key findings
+- **Research Question Analysis**: Deconstruction of the main question
+- **Key Findings**: Organized by topic with supporting evidence
+- **Critical Analysis**: Evaluation of findings and their implications
+- **Gaps & Limitations**: What remains unclear or requires further research
+- **Actionable Recommendations**: Specific, practical next steps
+- **Sources & References**: Where applicable, note types of sources used
+
+## Research Principles:
+- Be thorough but concise
+- Distinguish between facts and opinions
+- Acknowledge uncertainty when information is incomplete
+- Provide context for findings
+- Focus on practical applicability
+- Maintain objectivity while being comprehensive
+
+Conduct your research with the highest standards of academic and professional rigor.`;
+      
+      messages.push({ role: 'system', content: researchSystemPrompt });
+      
+      // Add custom system prompt if provided
+      if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+      }
+      
+      // Add conversation history
+      if (Array.isArray(history)) {
+        for (const h of history) {
+          if (h && h.content != null) {
+            const role = h.type === 'assistant' ? 'assistant' : 'user';
+            messages.push({ role, content: String(h.content) });
+          }
+        }
+      }
+      
+      // Add current research prompt with enhanced context
+      const enhancedPrompt = `Please conduct a comprehensive deep research analysis on the following topic:
+
+"${prompt}"
+
+Please follow the research methodology outlined in your system instructions and provide a thorough, well-structured analysis that addresses all relevant aspects of this topic.`;
+      
+      messages.push({ role: 'user', content: enhancedPrompt });
+
+      // Build payload with research-optimized parameters
+      let payload;
+      if (isDeepResearchModel(researchModel)) {
+        // Responses API format for deep research models
+        // Note: Deep research models are "reasoning" models - no sampling params allowed
+        
+      // Limit prompt length to reduce token usage and avoid rate limits
+      const MAX_PROMPT_CHARS = 3000; // More reasonable limit for DR
+      const truncatedPrompt = typeof prompt === "string" && prompt.length > MAX_PROMPT_CHARS
+        ? prompt.slice(0, MAX_PROMPT_CHARS) + "…"
+        : prompt;
+        
+        const devInstructions = `You are a professional researcher. Produce a structured, citation-rich report with:
+- Clear section headers (Overview, Key Findings, Evidence, Gaps, Sources)
+- Bullet points with specific statistics and dates
+- Inline citations and a final sources list
+- Call out any places where data is weak or contested`;
+
+        // Use minimal, known-good Deep Research payload
+        payload = {
+          model: normalizeDeepResearchModel(researchModel),
+          input: [
+            { 
+              role: "developer", 
+              content: [{ type: "input_text", text: devInstructions }] 
+            },
+            { 
+              role: "user", 
+              content: [{ type: "input_text", text: truncatedPrompt }] 
+            }
+          ],
+          tools: [
+            { type: "web_search" }  // start with web_search, not web_search_preview
+          ],
+          background: true,
+          max_output_tokens: Number(import.meta.env.VITE_DR_MAX_OUTPUT_TOKENS ?? 20000)
+        };
+      } else {
+        // Chat completions API format
+        payload = { 
+          model: researchModel, 
+          messages,
+          // Research-specific parameters
+          temperature: 0.3,
+          top_p: 0.9,
+          frequency_penalty: 0.1,
+          presence_penalty: 0.1
+        };
+      }
+      
+      // Set appropriate token limits based on model capabilities
+      if (isDeepResearchModel(researchModel)) {
+        // Deep research models don't support token limit parameters
+        // They automatically handle output length based on the research task
+      } else if (isG5Like(researchModel)) {
+        payload.max_completion_tokens = 4000; // GPT-5 models can handle longer outputs
+      } else {
+        payload.max_tokens = 2000; // Standard models with moderate output
+      }
+
+      console.log('Deep research payload:', JSON.stringify(payload, null, 2));
+
+      // Use responses endpoint for deep research models, chat completions for others
+      let response;
+      let currentModel = researchModel; // Track the actual model used
+      
+      if (isDeepResearchModel(researchModel)) {
+        console.log('Using responses endpoint for deep research model:', researchModel);
+        
+        // Update payload with current model and use centralized rate limiter
+        payload.model = currentModel;
+        const drResult = await callDeepResearch(payload);
+        
+        // Extract normalized text from the result
+        content = drResult.text || 'No content received from deep research model.';
+        
+        // Update currentModel with the actual model used
+        currentModel = drResult.model_used || currentModel;
+        
+        // Log actual text length
+        console.log('Deep research response (chars):', content.length);
+      } else {
+        console.log('Using chat completions endpoint for model:', researchModel);
+        response = await callOpenAIChatCompletions(payload);
+        
+        // Chat completions format
+        if (response.choices && response.choices[0] && response.choices[0].message) {
+          content = response.choices[0].message.content || '';
+        } else {
+          console.error('Unexpected chat completions format:', response);
+          content = 'No content received from chat completions API';
+        }
+      }
+
+      // Logging moved to individual branches above
+
+      // Add note about token limiting if prompt was truncated
+      let finalContent = content;
+      if (isDeepResearchModel(researchModel) && prompt.length > 3000) {
+        finalContent = `📝 **Note**: Your query was automatically shortened to avoid rate limits. Full query: "${prompt}"\n\n---\n\n${content}`;
+      }
+
+      return {
+        success: true,
+        response: finalContent,
+        reply: finalContent,
+        model_used: currentModel || researchModel, // Use the actual model that was used
+        type: 'deep_research',
+        research_depth: 'comprehensive',
+        token_usage: response.usage,
+        endpoint_used: isDeepResearchModel(researchModel) ? 'responses' : 'chat/completions'
+      };
+    }
+
+    // Default chat response
+    const messages = [];
+    
+    // Add system prompt if provided
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    
+    // Add conversation history
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h && h.content != null) {
+          const role = h.type === 'assistant' ? 'assistant' : 'user';
+          messages.push({ role, content: String(h.content) });
+        }
+      }
+    }
+    
+    // Add current prompt with optional file URLs
+    if (fileUrls && fileUrls.length > 0) {
+      const contentParts = [{ type: 'text', text: prompt }];
+      for (const url of fileUrls) {
+        if (url) {
+          contentParts.push({ type: 'image_url', image_url: { url: String(url) } });
+        }
+      }
+      messages.push({ role: 'user', content: contentParts });
+    } else {
+      messages.push({ role: 'user', content: prompt });
+    }
+
+    // Build payload
+    const payload = { model: effectiveModel, messages };
+    
+    if (isG5Like(effectiveModel)) {
+      payload.max_completion_tokens = 4000;
+    } else {
+      payload.max_tokens = 4000;
+      payload.temperature = 0.9;
+    }
+
+    console.log('About to call OpenAI API with payload:', JSON.stringify(payload, null, 2));
+    const response = await callOpenAIChatCompletions(payload);
+    console.log('OpenAI API response:', response);
+    console.log('response.choices:', response.choices);
+    console.log('response.choices[0]:', response.choices?.[0]);
+    console.log('response.choices[0].message:', response.choices?.[0]?.message);
+    console.log('response.choices[0].message.content:', response.choices?.[0]?.message?.content);
+    const content = response.choices?.[0]?.message?.content || '';
+    console.log('Extracted content:', content);
+    
+    // Handle empty responses (likely due to token limits)
+    let finalContent = content;
+    if (!content) {
+      finalContent = 'I apologize, but I was unable to generate a complete response. This might be due to the complexity of your query or token limits. Please try rephrasing your question or breaking it into smaller parts.';
+    } else if (content.includes('incomplete_details') && content.includes('max_output_tokens')) {
+      finalContent = 'The report was cut short due to length limits; retrying with optimized parameters...\n\n' + content;
+    }
+
+    return {
+      success: true,
+      response: finalContent,
+      reply: finalContent,
+      model_used: response.model || effectiveModel
+    };
+
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return {
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      response: `Error: ${error.message}`,
+      reply: `Error: ${error.message}`
+    };
+  }
+};
+
+export const openaiChat = async (params) => {
+  console.log('Real openaiChat called with params:', params);
+  
+  if (!OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env.local file.');
+  }
+
+  const { prompt, model, systemPrompt, history } = params;
+  const effectiveModel = model || 'gpt-4o';
+
+  try {
+    const messages = [];
+    
+    // Add system prompt if provided
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    
+    // Add conversation history
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h && h.content != null) {
+          const role = h.type === 'assistant' ? 'assistant' : 'user';
+          messages.push({ role, content: String(h.content) });
+        }
+      }
+    }
+    
+    // Add current prompt
+    messages.push({ role: 'user', content: prompt });
+
+    // Build payload
+    const payload = { model: effectiveModel, messages };
+    
+    if (isG5Like(effectiveModel)) {
+      payload.max_completion_tokens = 4000;
+    } else {
+      payload.max_tokens = 4000;
+      payload.temperature = 0.9;
+    }
+
+    const response = await callOpenAIChatCompletions(payload);
+    const content = response.choices?.[0]?.message?.content || '';
+
+    return {
+      success: true,
+      response: content,
+      reply: content,
+      model_used: response.model || effectiveModel
+    };
+
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return {
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      response: `Error: ${error.message}`,
+      reply: `Error: ${error.message}`
+    };
+  }
+};
+
+export const chatWithRetrieval = async (params) => {
+  console.log('Real chatWithRetrieval called with params:', params);
+  
+  if (!OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env.local file.');
+  }
+
+  const { message, history, assistantConfig, fileUrls } = params;
+  const effectiveModel = assistantConfig?.model || 'gpt-4o';
+
+  try {
+    const messages = [];
+    
+    // Add system prompt if provided
+    if (assistantConfig?.system_prompt) {
+      messages.push({ role: 'system', content: assistantConfig.system_prompt });
+    }
+    
+    // Add conversation history
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h && h.content != null) {
+          const role = h.type === 'assistant' ? 'assistant' : 'user';
+          messages.push({ role, content: String(h.content) });
+        }
+      }
+    }
+    
+    // Add current message with optional file URLs
+    if (fileUrls && fileUrls.length > 0) {
+      const contentParts = [{ type: 'text', text: message }];
+      for (const url of fileUrls) {
+        if (url) {
+          contentParts.push({ type: 'image_url', image_url: { url: String(url) } });
+        }
+      }
+      messages.push({ role: 'user', content: contentParts });
+    } else {
+      messages.push({ role: 'user', content: message });
+    }
+
+    // Build payload
+    const payload = { model: effectiveModel, messages };
+    
+    if (isG5Like(effectiveModel)) {
+      payload.max_completion_tokens = 4000;
+    } else {
+      payload.max_tokens = 4000;
+      payload.temperature = 0.9;
+    }
+
+    const response = await callOpenAIChatCompletions(payload);
+    const content = response.choices?.[0]?.message?.content || '';
+
+    return {
+      success: true,
+      response: content,
+      reply: content,
+      model_used: response.model || effectiveModel
+    };
+
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return {
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      response: `Error: ${error.message}`,
+      reply: `Error: ${error.message}`
+    };
+  }
+};
+
+export const chatStandard = async (params) => {
+  console.log('Real chatStandard called with params:', params);
+  
+  if (!OPENAI_API_KEY) {
+    throw new Error('OpenAI API key not found. Please set VITE_OPENAI_API_KEY in your .env.local file.');
+  }
+
+  const { message, history, assistantConfig, fileUrls } = params;
+  const effectiveModel = assistantConfig?.model || 'gpt-4o';
+
+  try {
+    const messages = [];
+    
+    // Add system prompt if provided
+    if (assistantConfig?.system_prompt) {
+      messages.push({ role: 'system', content: assistantConfig.system_prompt });
+    }
+    
+    // Add conversation history
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h && h.content != null) {
+          const role = h.type === 'assistant' ? 'assistant' : 'user';
+          messages.push({ role, content: String(h.content) });
+        }
+      }
+    }
+    
+    // Add current message with optional file URLs
+    if (fileUrls && fileUrls.length > 0) {
+      const contentParts = [{ type: 'text', text: message }];
+      for (const url of fileUrls) {
+        if (url) {
+          contentParts.push({ type: 'image_url', image_url: { url: String(url) } });
+        }
+      }
+      messages.push({ role: 'user', content: contentParts });
+    } else {
+      messages.push({ role: 'user', content: message });
+    }
+
+    // Build payload
+    const payload = { model: effectiveModel, messages };
+    
+    if (isG5Like(effectiveModel)) {
+      payload.max_completion_tokens = 4000;
+    } else {
+      payload.max_tokens = 4000;
+      payload.temperature = 0.9;
+    }
+
+    const response = await callOpenAIChatCompletions(payload);
+    const content = response.choices?.[0]?.message?.content || '';
+
+    return {
+      success: true,
+      response: content,
+      reply: content,
+      model_used: response.model || effectiveModel
+    };
+
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    return {
+      success: false,
+      error: error.message || 'Unknown error occurred',
+      response: `Error: ${error.message}`,
+      reply: `Error: ${error.message}`
+    };
+  }
+};

@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Bot } from 'lucide-react';
 import VectorStoreManager from '../components/ai/VectorStoreManager';
-import { ALLOWED_MODELS } from './LysaghtAI'; // Import the whitelist
+import { ALLOWED_MODELS } from '@/constants/models'; // Import the whitelist
 
 const AssistantForm = ({ assistant, onSave, onCancel }) => {
     const [formData, setFormData] = useState({
