@@ -93,8 +93,10 @@ export default function UserManagementPage() {
         try {
             const configs = {};
             for (const role of availableRoles) {
-                const permissions = await getRolePermissions(role);
-                configs[role] = permissions;
+                if (role && role.trim() !== '') {
+                    const permissions = await getRolePermissions(role);
+                    configs[role] = permissions;
+                }
             }
             setRoleConfigs(configs);
             setDatabaseError(null);

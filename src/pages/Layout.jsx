@@ -79,7 +79,10 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
   // Function to filter navigation items based on user permissions
   const filterNavigationItems = async (userRole) => {
-    if (!userRole) return { navItems: [], adminItems: [] };
+    if (!userRole || userRole.trim() === '') {
+      console.log('No valid user role provided for navigation filtering');
+      return { navItems: [], adminItems: [] };
+    }
 
     try {
       // Filter main navigation items based on permissions

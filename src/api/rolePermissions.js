@@ -65,6 +65,19 @@ export const getPermissions = async () => {
  */
 export const getRolePermissions = async (roleName) => {
     try {
+        // Check if roleName is empty or invalid
+        if (!roleName || roleName.trim() === '') {
+            console.log('Empty role name provided');
+            return [];
+        }
+
+        // First check if tables exist
+        const tablesExist = await checkTablesExist();
+        if (!tablesExist) {
+            console.log('Database tables do not exist yet');
+            return [];
+        }
+
         // First get the role ID
         const { data: roleData, error: roleError } = await supabase
             .from('roles')
@@ -153,6 +166,12 @@ export const saveRolePermissions = async (roleName, pageNames) => {
  */
 export const hasPermission = async (userRole, pageName) => {
     try {
+        // Check if userRole is empty or invalid
+        if (!userRole || userRole.trim() === '') {
+            console.log('Empty user role provided');
+            return false;
+        }
+
         const permissions = await getRolePermissions(userRole);
         return permissions.includes(pageName);
     } catch (error) {
