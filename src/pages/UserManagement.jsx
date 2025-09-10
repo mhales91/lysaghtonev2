@@ -29,6 +29,7 @@ export default function UserManagementPage() {
     const [editingWidgetRole, setEditingWidgetRole] = useState(null);
     const [widgetConfigs, setWidgetConfigs] = useState({});
     const [selectedWidgets, setSelectedWidgets] = useState([]);
+    const [databaseError, setDatabaseError] = useState(null);
 
     // Check if user has permission to access User Management
     if (!currentUser || !canAccessUserManagement(currentUser.user_role)) {
@@ -87,50 +88,21 @@ export default function UserManagementPage() {
         'Client': 6
     };
 
-    // Load role configurations from database with localStorage fallback
+    // Load role configurations from database
     const loadRoleConfigs = async () => {
         try {
-            // First try to load from database
             const configs = {};
-            let databaseAvailable = true;
-            
             for (const role of availableRoles) {
-                try {
-                    const permissions = await getRolePermissions(role);
-                    configs[role] = permissions;
-                } catch (error) {
-                    console.log(`Database not available for role ${role}, using localStorage fallback`);
-                    databaseAvailable = false;
-                    break;
-                }
+                const permissions = await getRolePermissions(role);
+                configs[role] = permissions;
             }
-            
-            if (databaseAvailable) {
-                setRoleConfigs(configs);
-                console.log('Loaded role configurations from database');
-            } else {
-                // Fallback to localStorage
-                const saved = localStorage.getItem('roleConfigs');
-                if (saved) {
-                    setRoleConfigs(JSON.parse(saved));
-                    console.log('Loaded role configurations from localStorage (database not available)');
-                } else {
-                    // Use default configurations
-                    const defaultConfigs = {
-                        'Admin': allPages,
-                        'Director': allPages,
-                        'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                        'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                        'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-                    };
-                    setRoleConfigs(defaultConfigs);
-                    localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
-                    console.log('Using default role configurations (database not available)');
-                }
-            }
+            setRoleConfigs(configs);
+            setDatabaseError(null);
+            console.log('Loaded role configurations from database');
         } catch (error) {
             console.error('Error loading role configurations:', error);
-            toast.error('Failed to load role configurations');
+            setDatabaseError('Database tables not set up. Please run the SQL script in your Supabase dashboard.');
+            toast.error('Database not set up. Please run the SQL script first.');
         }
     };
 
@@ -219,8 +191,13 @@ export default function UserManagementPage() {
     useEffect(() => {
         const initializeData = async () => {
             await loadUsers();
-            await initializeDefaultPermissions(); // Initialize database tables
-            await loadRoleConfigs();
+            // Try to initialize database tables
+            const initResult = await initializeDefaultPermissions();
+            if (initResult.success) {
+                await loadRoleConfigs();
+            } else {
+                console.error('Database initialization failed:', initResult.error);
+            }
             loadWidgetConfigs();
         };
         initializeData();
@@ -319,7 +296,6 @@ export default function UserManagementPage() {
 
     const handleSaveRoleConfig = async (role, selectedPages) => {
         try {
-            // Try to save to database first
             const result = await saveRolePermissions(role, selectedPages);
             
             if (result.success) {
@@ -333,48 +309,18 @@ export default function UserManagementPage() {
                 // Clear permission cache to force refresh
                 clearPermissionCache();
                 
-                toast.success(`Role permissions updated for ${role} (saved to database)`);
+                toast.success(`Role permissions updated for ${role}`);
                 setShowRoleConfig(false);
                 setEditingRole(null);
                 
                 // Trigger navigation refresh
                 window.dispatchEvent(new CustomEvent('permissionsChanged'));
             } else {
-                // Fallback to localStorage if database fails
-                console.log('Database save failed, using localStorage fallback');
-                const updatedConfigs = {
-                    ...roleConfigs,
-                    [role]: selectedPages
-                };
-                setRoleConfigs(updatedConfigs);
-                localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-                
-                // Clear permission cache to force refresh
-                clearPermissionCache();
-                
-                toast.success(`Role permissions updated for ${role} (saved locally)`);
-                setShowRoleConfig(false);
-                setEditingRole(null);
-                
-                // Trigger navigation refresh
-                window.dispatchEvent(new CustomEvent('permissionsChanged'));
+                toast.error(`Failed to update role permissions: ${result.error}`);
             }
         } catch (error) {
             console.error('Error saving role permissions:', error);
-            // Fallback to localStorage
-            const updatedConfigs = {
-                ...roleConfigs,
-                [role]: selectedPages
-            };
-            setRoleConfigs(updatedConfigs);
-            localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-            
-            toast.success(`Role permissions updated for ${role} (saved locally - database unavailable)`);
-            setShowRoleConfig(false);
-            setEditingRole(null);
-            
-            // Trigger navigation refresh
-            window.dispatchEvent(new CustomEvent('permissionsChanged'));
+            toast.error('Failed to save role permissions. Please check database connection.');
         }
     };
 
@@ -713,6 +659,36 @@ export default function UserManagementPage() {
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
                     <p className="text-gray-600">Approve, manage, and assign roles to users.</p>
+                    
+                    {databaseError && (
+                        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex">
+                                <div className="flex-shrink-0">
+                                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div className="ml-3">
+                                    <h3 className="text-sm font-medium text-red-800">
+                                        Database Setup Required
+                                    </h3>
+                                    <div className="mt-2 text-sm text-red-700">
+                                        <p>{databaseError}</p>
+                                        <div className="mt-2">
+                                            <p className="font-medium">To fix this:</p>
+                                            <ol className="list-decimal list-inside mt-1 space-y-1">
+                                                <li>Go to your Supabase project dashboard</li>
+                                                <li>Navigate to SQL Editor</li>
+                                                <li>Copy the contents of <code className="bg-red-100 px-1 rounded">initialize-role-permissions.sql</code></li>
+                                                <li>Paste and run the SQL script</li>
+                                                <li>Refresh this page</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     
                     {/* Debug buttons for localhost */}
                     {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (

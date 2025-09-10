@@ -81,25 +81,31 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const filterNavigationItems = async (userRole) => {
     if (!userRole) return { navItems: [], adminItems: [] };
 
-    // Filter main navigation items based on permissions
-    const navItems = [];
-    for (const item of allNavigationItems) {
-      const hasAccess = await hasPermission(userRole, item.title);
-      if (hasAccess) {
-        navItems.push(item);
+    try {
+      // Filter main navigation items based on permissions
+      const navItems = [];
+      for (const item of allNavigationItems) {
+        const hasAccess = await hasPermission(userRole, item.title);
+        if (hasAccess) {
+          navItems.push(item);
+        }
       }
-    }
 
-    // Filter admin navigation items based on permissions
-    const adminItems = [];
-    for (const item of adminNavigationItems) {
-      const hasAccess = await hasPermission(userRole, item.title);
-      if (hasAccess) {
-        adminItems.push(item);
+      // Filter admin navigation items based on permissions
+      const adminItems = [];
+      for (const item of adminNavigationItems) {
+        const hasAccess = await hasPermission(userRole, item.title);
+        if (hasAccess) {
+          adminItems.push(item);
+        }
       }
-    }
 
-    return { navItems, adminItems };
+      return { navItems, adminItems };
+    } catch (error) {
+      console.error('Error filtering navigation items:', error);
+      // Return empty arrays if database is not available
+      return { navItems: [], adminItems: [] };
+    }
   };
 
   useEffect(() => {
