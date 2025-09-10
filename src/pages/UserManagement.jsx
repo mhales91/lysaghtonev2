@@ -88,24 +88,34 @@ export default function UserManagementPage() {
 
     // Load role configurations from localStorage
     const loadRoleConfigs = () => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            const saved = localStorage.getItem('roleConfigs');
-            if (saved) {
-                setRoleConfigs(JSON.parse(saved));
-            } else {
-                // Default configurations
-                const defaultConfigs = {
-                    'Admin': allPages,
-                    'Director': allPages,
-                    'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                    'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                    'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-                };
-                setRoleConfigs(defaultConfigs);
-                localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
+        const saved = localStorage.getItem('roleConfigs');
+        if (saved) {
+            try {
+                const roleConfigs = JSON.parse(saved);
+                setRoleConfigs(roleConfigs);
+                // Also update global configs
+                setGlobalRoleConfigs(roleConfigs);
+            } catch (error) {
+                console.warn('Error parsing roleConfigs from localStorage:', error);
+                loadDefaultConfigs();
             }
+        } else {
+            loadDefaultConfigs();
         }
+    };
+
+    const loadDefaultConfigs = () => {
+        // Default configurations
+        const defaultConfigs = {
+            'Admin': allPages,
+            'Director': allPages,
+            'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
+            'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
+            'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
+        };
+        setRoleConfigs(defaultConfigs);
+        setGlobalRoleConfigs(defaultConfigs);
+        localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
     };
 
     // Load widget configurations from localStorage
@@ -313,14 +323,9 @@ export default function UserManagementPage() {
         // Update global role configs so other components can see the changes
         setGlobalRoleConfigs(updatedConfigs);
         
-        if (isLocalhost) {
-            // Save to localStorage on localhost
-            localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-        } else {
-            // On production, we could save to database here if needed
-            // For now, just keep in memory for the session
-            console.log('Role permissions updated for session:', role, selectedPages);
-        }
+        // Always save to localStorage regardless of environment
+        localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
+        console.log('Role permissions updated for session:', role, selectedPages);
         
         toast.success(`Role permissions updated for ${role}`);
         setShowRoleConfig(false);
