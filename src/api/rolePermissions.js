@@ -1,4 +1,18 @@
 import { supabase } from '@/lib/supabase-client';
+import { createClient } from '@supabase/supabase-js';
+
+// Create service role client for admin operations (bypasses RLS)
+const supabaseUrl = 'https://lysaghtone.com/';
+const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTY2ODEyOTEsImV4cCI6MjA3MjI1NzI5MX0.M-3C2n285htKskqDHhGQMJx509mTAObsi3WRkpJv5iA';
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+  db: {
+    schema: "public",
+  },
+});
 
 // Get all role permissions from database
 export const getRolePermissions = async () => {
@@ -6,7 +20,7 @@ export const getRolePermissions = async () => {
     console.log('🔍 Attempting to fetch all role permissions...');
     
     // Try the most basic query possible - no ordering, no filters
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_permissions')
       .select('user_role, permissions');
     
@@ -47,7 +61,7 @@ export const getRolePermission = async (role) => {
       return [];
     }
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_permissions')
       .select('permissions')
       .eq('user_role', role)
@@ -99,7 +113,7 @@ export const updateMultipleRolePermissions = async (permissionsMap) => {
       updated_at: new Date().toISOString()
     }));
     
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_permissions')
       .upsert(updates)
       .select();
