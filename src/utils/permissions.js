@@ -27,12 +27,7 @@ export const setGlobalRoleConfigs = (configs) => {
 
 // Load role configurations from localStorage or return defaults
 export const getRolePermissions = (role) => {
-    // First check if we have global configs set by UserManagement component
-    if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
-        return globalRoleConfigs[role];
-    }
-    
-    // Always try to load from localStorage regardless of environment
+    // Always try to load from localStorage first (most reliable)
     const saved = localStorage.getItem('roleConfigs');
     if (saved) {
         try {
@@ -45,7 +40,12 @@ export const getRolePermissions = (role) => {
         }
     }
     
-    // Fallback to default configuration
+    // Fallback to global configs if localStorage is empty
+    if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
+        return globalRoleConfigs[role];
+    }
+    
+    // Final fallback to default configuration
     return defaultPermissions[role] || [];
 };
 
