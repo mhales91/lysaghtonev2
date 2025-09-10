@@ -80,17 +80,42 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
   // Function to filter navigation items based on user permissions
   const filterNavigationItems = (userRole) => {
-    if (!userRole) return { navItems: [], adminItems: [] };
+    console.log('🔍 filterNavigationItems called with userRole:', userRole);
+    
+    if (!userRole) {
+      console.log('❌ No user role provided, returning empty arrays');
+      return { navItems: [], adminItems: [] };
+    }
+
+    // Check what permissions are available for this role
+    const permissions = getRolePermissions(userRole);
+    console.log('📋 Permissions for role', userRole, ':', permissions);
+    
+    // Test hasPermission for each navigation item
+    console.log('🧪 Testing hasPermission for each navigation item:');
+    allNavigationItems.forEach(item => {
+      const hasAccess = hasPermission(userRole, item.title);
+      console.log(`  - ${item.title}: ${hasAccess ? '✅' : '❌'}`);
+    });
 
     // Filter main navigation items based on permissions
-    const navItems = allNavigationItems.filter(item => 
-      hasPermission(userRole, item.title)
-    );
+    const navItems = allNavigationItems.filter(item => {
+      const hasAccess = hasPermission(userRole, item.title);
+      console.log(`🔍 Filtering ${item.title}: ${hasAccess ? 'INCLUDED' : 'EXCLUDED'}`);
+      return hasAccess;
+    });
 
     // Filter admin navigation items based on permissions
-    const adminItems = adminNavigationItems.filter(item => 
-      hasPermission(userRole, item.title)
-    );
+    const adminItems = adminNavigationItems.filter(item => {
+      const hasAccess = hasPermission(userRole, item.title);
+      console.log(`🔍 Filtering admin ${item.title}: ${hasAccess ? 'INCLUDED' : 'EXCLUDED'}`);
+      return hasAccess;
+    });
+
+    console.log('📊 Final filtered results:', { 
+      navItems: navItems.map(item => item.title), 
+      adminItems: adminItems.map(item => item.title) 
+    });
 
     return { navItems, adminItems };
   };
@@ -99,12 +124,17 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   useEffect(() => {
     const loadPermissions = async () => {
       try {
-        console.log('Loading permissions from database...');
-        await loadAllRolePermissions();
-        console.log('Permissions loaded successfully');
+        console.log('🔄 Loading permissions from database...');
+        const result = await loadAllRolePermissions();
+        console.log('✅ Permissions loaded successfully:', result);
+        
+        // Check what's in localStorage after loading
+        const cached = localStorage.getItem('roleConfigs');
+        console.log('💾 Cached permissions in localStorage:', JSON.parse(cached || '{}'));
+        
         setPermissionsLoaded(true);
       } catch (error) {
-        console.error('Failed to load permissions from database:', error);
+        console.error('❌ Failed to load permissions from database:', error);
         // Still set permissions loaded to true to prevent infinite loading
         setPermissionsLoaded(true);
       }

@@ -1,5 +1,5 @@
 // Permission utility functions for dynamic role-based access control
-import { getRolePermission, getRolePermissions } from '@/api/rolePermissions';
+import { getRolePermission, getRolePermissions as getRolePermissionsFromDB } from '@/api/rolePermissions';
 
 // All available pages
 export const allPages = [
@@ -18,7 +18,7 @@ export const setGlobalRoleConfigs = (configs) => {
 };
 
 // Load role permissions from database with localStorage fallback
-export const getRolePermissionsFromDB = async (role) => {
+export const getRolePermissionsFromDBAsync = async (role) => {
     try {
         // First check if we have global configs set by UserManagement component
         if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
@@ -57,37 +57,57 @@ export const getRolePermissionsFromDB = async (role) => {
 
 // Synchronous version for immediate use (uses cached data)
 export const getRolePermissions = (role) => {
-    // First check if we have global configs set by UserManagement component
-    if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
-        return globalRoleConfigs[role];
+  console.log(`🔍 getRolePermissions called for role: "${role}"`);
+  
+  // First check if we have global configs set by UserManagement component
+  if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
+    console.log('✅ Using global configs:', globalRoleConfigs[role]);
+    return globalRoleConfigs[role];
+  }
+  
+  // Check localStorage for cached permissions
+  const cached = localStorage.getItem('roleConfigs');
+  console.log('💾 Checking localStorage for roleConfigs:', cached);
+  
+  if (cached) {
+    try {
+      const roleConfigs = JSON.parse(cached);
+      console.log('📊 Parsed roleConfigs:', roleConfigs);
+      
+      if (roleConfigs[role] && roleConfigs[role].length > 0) {
+        console.log(`✅ Found cached permissions for ${role}:`, roleConfigs[role]);
+        return roleConfigs[role];
+      } else {
+        console.log(`❌ No cached permissions found for role: ${role}`);
+      }
+    } catch (error) {
+      console.error('❌ Error parsing cached roleConfigs:', error);
     }
-    
-    // Check localStorage for cached permissions
-    const cached = localStorage.getItem('roleConfigs');
-    if (cached) {
-        try {
-            const roleConfigs = JSON.parse(cached);
-            if (roleConfigs[role] && roleConfigs[role].length > 0) {
-                return roleConfigs[role];
-            }
-        } catch (error) {
-            console.error('Error parsing cached roleConfigs:', error);
-        }
-    }
-    
-    // Return empty array if no permissions found (no defaults)
-    return [];
+  } else {
+    console.log('❌ No cached permissions found in localStorage');
+  }
+  
+  // Return empty array if no permissions found (no defaults)
+  console.log('⚠️ Returning empty array - no permissions found');
+  return [];
 };
 
 // Check if a user has permission to access a specific page
 export const hasPermission = (userRole, pageName) => {
-    const permissions = getRolePermissions(userRole);
-    return permissions.includes(pageName);
+  console.log(`🔐 hasPermission called: userRole="${userRole}", pageName="${pageName}"`);
+  
+  const permissions = getRolePermissions(userRole);
+  console.log(`📋 Retrieved permissions for ${userRole}:`, permissions);
+  
+  const hasAccess = permissions.includes(pageName);
+  console.log(`✅ hasPermission result: ${hasAccess}`);
+  
+  return hasAccess;
 };
 
 // Async version for checking permissions (loads from database if needed)
 export const hasPermissionAsync = async (userRole, pageName) => {
-    const permissions = await getRolePermissionsFromDB(userRole);
+    const permissions = await getRolePermissionsFromDBAsync(userRole);
     return permissions.includes(pageName);
 };
 
@@ -104,7 +124,7 @@ export const getUserAccessiblePages = (userRole) => {
 // Load all role permissions from database and cache them
 export const loadAllRolePermissions = async () => {
     try {
-        const allPermissions = await getRolePermissions();
+        const allPermissions = await getRolePermissionsFromDB();
         
         // Cache all permissions in localStorage
         localStorage.setItem('roleConfigs', JSON.stringify(allPermissions));
