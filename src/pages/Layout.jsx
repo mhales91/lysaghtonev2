@@ -106,7 +106,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setVisibleNavItems(filteredNav);
 
         // Check if user can access user management
-        const canAccess = await canAccessUserManagement(user.id);
+        const canAccess = canAccessUserManagement(user.user_role);
         setCanAccessUserMgmt(canAccess);
 
       } catch (e) {

@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase-client';
 import UserEditForm from '../components/admin/UserEditForm';
 import { canAccessUserManagement, allPages, allDashboardWidgets, updateRolePermissions, updateRoleWidgetPermissions, getRolePermissions, getRoleWidgetPermissions } from '@/utils/permissions';
 import { useUser } from '@/contexts/UserContext';
-import { PermissionsService } from '@/api/permissions';
+
 
 export default function UserManagementPage() {
     const { currentUser } = useUser();
@@ -31,7 +31,7 @@ export default function UserManagementPage() {
     const [rolePermissions, setRolePermissions] = useState({});
 
     // Check if user has permission to access User Management
-    if (!currentUser || !canAccessUserManagement(currentUser.id)) {
+    if (!currentUser || !canAccessUserManagement(currentUser.user_role)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <Card className="w-full max-w-md mx-auto">
@@ -196,10 +196,10 @@ export default function UserManagementPage() {
         console.log('Saving role config for:', role, 'with pages:', selectedPages);
         
         try {
-            await updateRolePermissions(role, selectedPages);
+            updateRolePermissions(role, selectedPages);
             
             // Reload permissions to update the UI
-            await loadRolesAndPermissions();
+            loadRolesAndPermissions();
             
             console.log('Role permissions updated successfully:', role, selectedPages);
             toast.success(`Role permissions updated for ${role}`);
@@ -229,10 +229,10 @@ export default function UserManagementPage() {
 
     const handleSaveWidgetConfig = async (role, selectedWidgets) => {
         try {
-            await updateRoleWidgetPermissions(role, selectedWidgets);
+            updateRoleWidgetPermissions(role, selectedWidgets);
             
             // Reload permissions to update the UI
-            await loadRolesAndPermissions();
+            loadRolesAndPermissions();
             
             toast.success(`Dashboard widgets updated for ${role}`);
             setShowWidgetConfig(false);
