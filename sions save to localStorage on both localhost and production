@@ -1,0 +1,5 @@
+[33mc5d9044[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Fix permission saving and navigation refresh
+[33m876af52[m Implement dynamic permission system for User Management
+[33mb1a2e7a[m Fix login/signup functionality and routing
+[33ma35fda9[m Fix LysaghtAI authentication and error handling
+[33m45e2e01[m Remove localhost restrictions for UI elements, keep environment-specific data logic

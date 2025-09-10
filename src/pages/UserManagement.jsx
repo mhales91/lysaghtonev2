@@ -7,9 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
-import UserEditForm from '../components/admin/UserEditForm'; // Assuming this component exists
-import { canAccessUserManagement, setGlobalRoleConfigs } from '@/utils/permissions';
+import UserEditForm from '../components/admin/UserEditForm';
+import { canAccessUserManagement, allPages, allDashboardWidgets, updateRolePermissions, updateRoleWidgetPermissions, getRolePermissions, getRoleWidgetPermissions } from '@/utils/permissions';
 import { useUser } from '@/contexts/UserContext';
+import { PermissionsService } from '@/api/permissions';
 
 export default function UserManagementPage() {
     const { currentUser } = useUser();
@@ -22,15 +23,15 @@ export default function UserManagementPage() {
     const [activeTab, setActiveTab] = useState('approved');
     const [showRoleConfig, setShowRoleConfig] = useState(false);
     const [editingRole, setEditingRole] = useState(null);
-    const [roleConfigs, setRoleConfigs] = useState({});
     const [selectedPages, setSelectedPages] = useState([]);
     const [showWidgetConfig, setShowWidgetConfig] = useState(false);
     const [editingWidgetRole, setEditingWidgetRole] = useState(null);
-    const [widgetConfigs, setWidgetConfigs] = useState({});
     const [selectedWidgets, setSelectedWidgets] = useState([]);
+    const [roles, setRoles] = useState([]);
+    const [rolePermissions, setRolePermissions] = useState({});
 
     // Check if user has permission to access User Management
-    if (!currentUser || !canAccessUserManagement(currentUser.user_role)) {
+    if (!currentUser || !canAccessUserManagement(currentUser.id)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <Card className="w-full max-w-md mx-auto">
@@ -53,31 +54,10 @@ export default function UserManagementPage() {
         );
     }
 
-    // All available pages
-    const allPages = [
-        'Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets',
-        'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings',
-        'User Management', 'AI Assistant Manager', 'Billing Settings', 'Analytics Settings', 'Prompt Library',
-        'TOE Admin', 'Import Jobs'
-    ];
-
     // Available roles
     const availableRoles = ['Admin', 'Director', 'Manager', 'Staff', 'Client'];
 
-    // Dashboard widgets available for each role level
-    const allDashboardWidgets = [
-        'Weekly Timesheet Hours',
-        'Yearly Performance (FYTD)',
-        'Workload',
-        'CRM Pipeline - All Departments',
-        'TOE Board - All Departments',
-        'SLA Tracker - All Departments',
-        'Project Portfolio',
-        'Upcoming Projects',
-        'Budget Utilisation'
-    ];
-
-    // Widgets available for each role level (Staff gets 8, others get 9)
+    // Widget limits for each role
     const roleWidgetLimits = {
         'Admin': 9,
         'Director': 9,
@@ -86,191 +66,49 @@ export default function UserManagementPage() {
         'Client': 6
     };
 
-    // Load role configurations from localStorage
-    const loadRoleConfigs = () => {
-        console.log('Loading role configs from localStorage...');
-        const saved = localStorage.getItem('roleConfigs');
-        if (saved) {
-            try {
-                const roleConfigs = JSON.parse(saved);
-                console.log('Loaded role configs from localStorage:', roleConfigs);
-                setRoleConfigs(roleConfigs);
-                // Also update global configs
-                setGlobalRoleConfigs(roleConfigs);
-            } catch (error) {
-                console.warn('Error parsing roleConfigs from localStorage:', error);
-                loadDefaultConfigs();
-            }
-        } else {
-            console.log('No saved role configs found, loading defaults');
-            loadDefaultConfigs();
-        }
-    };
-
-    const loadDefaultConfigs = () => {
-        // Default configurations
-        const defaultConfigs = {
-            'Admin': allPages,
-            'Director': allPages,
-            'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-            'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-            'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-        };
-        console.log('Loading default configs:', defaultConfigs);
-        setRoleConfigs(defaultConfigs);
-        setGlobalRoleConfigs(defaultConfigs);
-        localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
-    };
-
-    // Load widget configurations from localStorage
-    const loadWidgetConfigs = () => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            const saved = localStorage.getItem('widgetConfigs');
-            if (saved) {
-                setWidgetConfigs(JSON.parse(saved));
-            } else {
-                // Default widget configurations
-                const defaultWidgets = {
-                    'Admin': allDashboardWidgets,
-                    'Director': allDashboardWidgets,
-                    'Manager': allDashboardWidgets,
-                    'Staff': allDashboardWidgets.slice(0, 8),
-                    'Client': allDashboardWidgets.slice(0, 6)
+    // Load roles and permissions from database
+    const loadRolesAndPermissions = async () => {
+        try {
+            const rolesData = await PermissionsService.getRoles();
+            setRoles(rolesData);
+            
+            // Load permissions for each role
+            const permissions = {};
+            for (const role of rolesData) {
+                const pagePermissions = await PermissionsService.getRolePagePermissions(role.id);
+                const widgetPermissions = await PermissionsService.getRoleWidgetPermissions(role.id);
+                permissions[role.name] = {
+                    pages: pagePermissions,
+                    widgets: widgetPermissions
                 };
-                setWidgetConfigs(defaultWidgets);
-                localStorage.setItem('widgetConfigs', JSON.stringify(defaultWidgets));
             }
-        }
-    };
-
-    // Role-based page permissions for localhost only
-    const getRolePermissions = (role) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            // If role has a specific configuration, use it; otherwise use default
-            if (roleConfigs[role] && roleConfigs[role].length > 0) {
-                return roleConfigs[role];
-            }
-            // Fallback to default configuration
-            const defaultPermissions = {
-                'Admin': allPages,
-                'Director': allPages,
-                'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-            };
-            return defaultPermissions[role] || [];
-        }
-        // Fallback for production
-        const permissions = {
-            'Admin': allPages,
-            'Director': allPages,
-            'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-            'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-            'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-        };
-        return permissions[role] || [];
-    };
-
-    // Get widget permissions for a role
-    const getRoleWidgetPermissions = (role) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            // If role has a specific widget configuration, use it; otherwise use default
-            if (widgetConfigs[role] && widgetConfigs[role].length > 0) {
-                return widgetConfigs[role];
-            }
-            // Fallback to default configuration
-            const defaultWidgets = {
-                'Admin': allDashboardWidgets,
-                'Director': allDashboardWidgets,
-                'Manager': allDashboardWidgets,
-                'Staff': allDashboardWidgets.slice(0, 8),
-                'Client': allDashboardWidgets.slice(0, 6)
-            };
-            return defaultWidgets[role] || [];
-        }
-        return [];
-    };
-
-    // Handle widget configuration editing
-    const handleEditWidgetRole = (role) => {
-        setEditingWidgetRole(role);
-        setSelectedWidgets(getRoleWidgetPermissions(role));
-        setShowWidgetConfig(true);
-    };
-
-    // Save widget configuration
-    const handleSaveWidgetConfig = (role, selectedWidgets) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            const updatedConfigs = {
-                ...widgetConfigs,
-                [role]: selectedWidgets
-            };
-            setWidgetConfigs(updatedConfigs);
-            localStorage.setItem('widgetConfigs', JSON.stringify(updatedConfigs));
-            toast.success(`Dashboard widgets updated for ${role}`);
-            setShowWidgetConfig(false);
-            setEditingWidgetRole(null);
+            setRolePermissions(permissions);
+        } catch (error) {
+            console.error('Error loading roles and permissions:', error);
+            toast.error('Failed to load roles and permissions');
         }
     };
 
     useEffect(() => {
         loadUsers();
-        loadRoleConfigs();
-        loadWidgetConfigs();
+        loadRolesAndPermissions();
     }, []);
 
     const loadUsers = async () => {
         setIsLoading(true);
         try {
-            // Check if we're on localhost
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            console.log('🔍 loadUsers - isLocalhost:', isLocalhost);
-            
-            if (isLocalhost) {
-                // For localhost, get approved users from localStorage and database, pending from localStorage
-                const usersData = await User.list();
-                const dbApprovedUsers = usersData.filter(user => user.approval_status === 'approved');
-                const localApprovedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
-                const pendingUsersData = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-                
-                console.log('📊 User data loaded:', {
-                    usersData: usersData.length,
-                    dbApprovedUsers: dbApprovedUsers.length,
-                    localApprovedUsers: localApprovedUsers.length,
-                    pendingUsersData: pendingUsersData.length,
-                    pendingUsers: pendingUsersData
-                });
-                
-                // Combine database and localStorage approved users, prioritizing localStorage
-                const localUserIds = new Set(localApprovedUsers.map(u => u.id));
-                const dbUsersNotInLocal = dbApprovedUsers.filter(u => !localUserIds.has(u.id));
-                const allApprovedUsers = [...localApprovedUsers, ...dbUsersNotInLocal];
-                
-                console.log('✅ Setting users:', allApprovedUsers);
-                console.log('⏳ Setting pending users:', pendingUsersData);
-                
-                setUsers(allApprovedUsers);
-                setPendingUsers(pendingUsersData);
-            } else {
-                // For production, use database
             const usersData = await User.list();
-                
-                console.log('📊 Production user data loaded:', usersData);
-                
-                const approvedUsers = usersData.filter(user => user.approval_status === 'approved');
-                const pendingUsersData = usersData.filter(user => user.approval_status === 'pending');
-                
-                console.log('✅ Setting approved users:', approvedUsers);
-                console.log('⏳ Setting pending users:', pendingUsersData);
-                
-                setUsers(approvedUsers);
-                setPendingUsers(pendingUsersData);
-            }
+            
+            console.log('📊 User data loaded:', usersData);
+            
+            const approvedUsers = usersData.filter(user => user.approval_status === 'approved');
+            const pendingUsersData = usersData.filter(user => user.approval_status === 'pending');
+            
+            console.log('✅ Setting approved users:', approvedUsers);
+            console.log('⏳ Setting pending users:', pendingUsersData);
+            
+            setUsers(approvedUsers);
+            setPendingUsers(pendingUsersData);
         } catch (error) {
             console.error('Failed to load users:', error);
             toast.error('Failed to load users');
@@ -281,31 +119,14 @@ export default function UserManagementPage() {
 
     const handleApproveUser = async (user) => {
         try {
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-                // For localhost, move from pending to approved in localStorage
-                const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-                const updatedPendingUsers = pendingUsers.filter(u => u.id !== user.id);
-                localStorage.setItem('pendingUsers', JSON.stringify(updatedPendingUsers));
-                
-                const approvedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
-                const updatedUser = { ...user, approval_status: 'approved', approved_by: 'admin', approved_date: new Date().toISOString() };
-                approvedUsers.push(updatedUser);
-                localStorage.setItem('approvedUsers', JSON.stringify(approvedUsers));
-                
-                console.log('Updated approvedUsers in localStorage:', JSON.parse(localStorage.getItem('approvedUsers')));
-            } else {
-                // For production, update in database
-                await User.update(user.id, {
-                    approval_status: 'approved',
-                    approved_by: 'admin',
-                    approved_date: new Date().toISOString()
-                });
-            }
+            await User.update(user.id, {
+                approval_status: 'approved',
+                approved_by: 'admin',
+                approved_date: new Date().toISOString()
+            });
             
             toast.success('User approved successfully');
-            loadUsers(); // Reload to update the lists
+            loadUsers();
         } catch (error) {
             console.error('Failed to approve user:', error);
             toast.error('Failed to approve user');
@@ -314,62 +135,23 @@ export default function UserManagementPage() {
 
     const handleRejectUser = async (user) => {
         try {
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-                // For localhost, just remove from localStorage
-                const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-                const updatedPendingUsers = pendingUsers.filter(u => u.id !== user.id);
-                localStorage.setItem('pendingUsers', JSON.stringify(updatedPendingUsers));
-            } else {
-                // For production, update in database
-                await User.update(user.id, {
-                    approval_status: 'rejected',
-                    approved_by: 'admin',
-                    approved_date: new Date().toISOString()
-                });
-            }
+            await User.update(user.id, {
+                approval_status: 'rejected',
+                approved_by: 'admin',
+                approved_date: new Date().toISOString()
+            });
             
             toast.success('User rejected');
-            loadUsers(); // Reload to update the lists
+            loadUsers();
         } catch (error) {
             console.error('Failed to reject user:', error);
             toast.error('Failed to reject user');
         }
     };
 
-    const handleSaveUser = async (userData) => { // Function signature matches expected usage
+    const handleSaveUser = async (userData) => {
         try {
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-                // For localhost, always use localStorage to avoid database constraints
-                const localApprovedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
-                const localUser = localApprovedUsers.find(u => u.id === editingUser.id);
-                
-                if (localUser) {
-                    // Update existing localStorage user
-                    const updatedLocalUsers = localApprovedUsers.map(u => 
-                        u.id === editingUser.id 
-                            ? { ...u, ...userData, updated_at: new Date().toISOString() }
-                            : u
-                    );
-                    localStorage.setItem('approvedUsers', JSON.stringify(updatedLocalUsers));
-                } else {
-                    // Create new localStorage entry for database user
-                    const newLocalUser = {
-                        ...editingUser,
-                        ...userData,
-                        id: editingUser.id, // Keep original ID
-                        updated_at: new Date().toISOString()
-                    };
-                    localApprovedUsers.push(newLocalUser);
-                    localStorage.setItem('approvedUsers', JSON.stringify(localApprovedUsers));
-                }
-            } else {
-                // For production, update in database
             await User.update(editingUser.id, userData);
-            }
             
             toast.success('User updated successfully!');
             setShowForm(false);
@@ -383,21 +165,7 @@ export default function UserManagementPage() {
 
     const handleSavePendingUser = async (userData) => {
         try {
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-                // For localhost, update in localStorage
-                const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-                const updatedPendingUsers = pendingUsers.map(u => 
-                    u.id === editingPendingUser.id 
-                        ? { ...u, ...userData, updated_at: new Date().toISOString() }
-                        : u
-                );
-                localStorage.setItem('pendingUsers', JSON.stringify(updatedPendingUsers));
-            } else {
-                // For production, update in database
-                await User.update(editingPendingUser.id, userData);
-            }
+            await User.update(editingPendingUser.id, userData);
             
             toast.success('Pending user updated successfully!');
             setShowForm(false);
@@ -409,61 +177,78 @@ export default function UserManagementPage() {
         }
     };
 
-    // Role configuration functions for localhost only
-    const handleEditRole = (role) => {
+    // Role configuration functions
+    const handleEditRole = async (role) => {
         console.log('Editing role:', role);
-        const currentPermissions = getRolePermissions(role);
-        console.log('Current permissions for', role, ':', currentPermissions);
-        setEditingRole(role);
-        setSelectedPages(currentPermissions);
-        setShowRoleConfig(true);
+        try {
+            const currentPermissions = rolePermissions[role]?.pages || [];
+            console.log('Current permissions for', role, ':', currentPermissions);
+            setEditingRole(role);
+            setSelectedPages(currentPermissions);
+            setShowRoleConfig(true);
+        } catch (error) {
+            console.error('Error loading role permissions:', error);
+            toast.error('Failed to load role permissions');
+        }
     };
 
-    const handleSaveRoleConfig = (role, selectedPages) => {
+    const handleSaveRoleConfig = async (role, selectedPages) => {
         console.log('Saving role config for:', role, 'with pages:', selectedPages);
         
-        // Always update the role configs state
-        const updatedConfigs = {
-            ...roleConfigs,
-            [role]: selectedPages
-        };
-        console.log('Updated configs:', updatedConfigs);
-        
-        setRoleConfigs(updatedConfigs);
-        
-        // Update global role configs so other components can see the changes
-        setGlobalRoleConfigs(updatedConfigs);
-        
-        // Always save to localStorage regardless of environment
-        localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-        console.log('Saved to localStorage:', JSON.stringify(updatedConfigs));
-        console.log('Role permissions updated for session:', role, selectedPages);
-        
-        toast.success(`Role permissions updated for ${role}`);
-        setShowRoleConfig(false);
-        setEditingRole(null);
-        
-        // Trigger navigation refresh
-        window.dispatchEvent(new CustomEvent('permissionsChanged'));
+        try {
+            await updateRolePermissions(role, selectedPages);
+            
+            // Reload permissions to update the UI
+            await loadRolesAndPermissions();
+            
+            console.log('Role permissions updated successfully:', role, selectedPages);
+            toast.success(`Role permissions updated for ${role}`);
+            setShowRoleConfig(false);
+            setEditingRole(null);
+            
+            // Trigger navigation refresh
+            window.dispatchEvent(new CustomEvent('permissionsChanged'));
+        } catch (error) {
+            console.error('Error saving role permissions:', error);
+            toast.error('Failed to save role permissions');
+        }
     };
 
-    // Delete user function for localhost only
+    // Widget configuration functions
+    const handleEditWidgetRole = async (role) => {
+        try {
+            const currentWidgets = rolePermissions[role]?.widgets || [];
+            setEditingWidgetRole(role);
+            setSelectedWidgets(currentWidgets);
+            setShowWidgetConfig(true);
+        } catch (error) {
+            console.error('Error loading widget permissions:', error);
+            toast.error('Failed to load widget permissions');
+        }
+    };
+
+    const handleSaveWidgetConfig = async (role, selectedWidgets) => {
+        try {
+            await updateRoleWidgetPermissions(role, selectedWidgets);
+            
+            // Reload permissions to update the UI
+            await loadRolesAndPermissions();
+            
+            toast.success(`Dashboard widgets updated for ${role}`);
+            setShowWidgetConfig(false);
+            setEditingWidgetRole(null);
+        } catch (error) {
+            console.error('Error saving widget permissions:', error);
+            toast.error('Failed to save widget permissions');
+        }
+    };
+
     const handleDeleteUser = async (user) => {
         try {
-            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isLocalhost) {
-                // For localhost, remove from localStorage
-                const localApprovedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
-                const updatedUsers = localApprovedUsers.filter(u => u.id !== user.id);
-                localStorage.setItem('approvedUsers', JSON.stringify(updatedUsers));
-            } else {
-                // For production, delete from database
-                await User.delete(user.id);
-            }
+            await User.delete(user.id);
             
             toast.success('User deleted successfully');
-            loadUsers(); // Reload to update the lists
+            loadUsers();
         } catch (error) {
             console.error('Failed to delete user:', error);
             toast.error('Failed to delete user');
@@ -479,13 +264,9 @@ export default function UserManagementPage() {
         }
     };
 
-    // Component to show accessible pages for localhost only
+    // Component to show accessible pages
     const AccessiblePages = ({ user }) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        if (!isLocalhost) return null;
-        
-        const accessiblePages = getRolePermissions(user.user_role);
+        const accessiblePages = rolePermissions[user.user_role]?.pages || [];
         
         return (
             <div className="mt-2">
@@ -576,7 +357,6 @@ export default function UserManagementPage() {
 
     // Dashboard Widgets Configuration Modal
     if (showWidgetConfig && editingWidgetRole) {
-
         const toggleWidget = (widget) => {
             setSelectedWidgets(prev => 
                 prev.includes(widget) 
@@ -846,7 +626,7 @@ export default function UserManagementPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {availableRoles.map(role => {
-                                        const permissions = getRolePermissions(role);
+                                        const permissions = rolePermissions[role]?.pages || [];
                                         return (
                                             <Card key={role} className="p-4">
                                                 <CardHeader className="pb-3">
@@ -886,7 +666,7 @@ export default function UserManagementPage() {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                     {availableRoles.map(role => {
-                                        const widgets = getRoleWidgetPermissions(role);
+                                        const widgets = rolePermissions[role]?.widgets || [];
                                         return (
                                             <Card key={role} className="p-4">
                                                 <CardHeader className="pb-3">
