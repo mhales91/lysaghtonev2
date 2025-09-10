@@ -10,7 +10,7 @@ const getEnvVar = (key, defaultValue) => {
 };
 
 // Create service role client for admin operations (bypasses RLS)
-const supabaseUrl = getEnvVar("VITE_SUPABASE_URL", "http://127.0.0.1:54321");
+const supabaseUrl = getEnvVar("VITE_SUPABASE_URL", "https://lysaghtone.com/");
 const supabaseServiceKey = getEnvVar(
   "VITE_SUPABASE_SERVICE_ROLE_KEY",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU"
@@ -415,6 +415,8 @@ export class UserEntity extends CustomEntity {
         error: authError,
       } = await supabase.auth.getUser();
 
+      console.log("User.me() - Auth check:", { user: user?.id, email: user?.email, authError });
+
       if (authError) {
         // Handle specific auth errors more gracefully
         if (
@@ -435,12 +437,17 @@ export class UserEntity extends CustomEntity {
 
       if (!user) throw new Error("Not authenticated");
 
+      console.log("User.me() - Authenticated user found:", { id: user.id, email: user.email });
+
       // Use admin client (this.supabase) for database operations to bypass RLS
+      console.log("User.me() - Querying users table for user ID:", user.id);
       const { data, error } = await this.supabase
         .from("users")
         .select("*")
         .eq("id", user.id)
         .maybeSingle(); // Use maybeSingle to handle no rows gracefully
+
+      console.log("User.me() - Database query result:", { data, error });
 
       if (error) {
         // Handle missing table gracefully
@@ -557,9 +564,9 @@ export class UserEntity extends CustomEntity {
   async login(provider = "dev") {
     // For local development, use a simple email/password flow
     if (provider === "dev") {
-      // Create a development user if it doesn't exist
-      const devEmail = "dev@localhost.com";
-      const devPassword = "dev123456";
+      // Try to use the working credentials from Vercel deployment
+      const devEmail = "mitchell@lysaght.net.nz";
+      const devPassword = "dev123456"; // You'll need to provide the correct password
 
       try {
         // Try to sign in first using regular supabase client
@@ -571,53 +578,10 @@ export class UserEntity extends CustomEntity {
 
         if (signInError) {
           console.log(
-            "Sign in failed, attempting to create user:",
+            "Sign in failed:",
             signInError.message
           );
-
-          // Try to create user using admin client
-          try {
-            const { data: signUpData, error: signUpError } =
-              await supabaseAdmin.auth.admin.createUser({
-                email: devEmail,
-                password: devPassword,
-                email_confirm: true, // Auto-confirm the user
-                user_metadata: {
-                  full_name: "Development User",
-                  role: "Admin",
-                },
-              });
-
-            if (signUpError) {
-              console.error("Admin sign up failed:", signUpError);
-              throw new Error("Please run the create-dev-user.sql script in your Supabase dashboard to create the development user manually.");
-            }
-
-            console.log("User created successfully:", signUpData);
-          } catch (adminError) {
-            console.error("Admin user creation failed:", adminError);
-            throw new Error("Please run the create-dev-user.sql script in your Supabase dashboard to create the development user manually.");
-          }
-
-          // Try to sign in again after signup
-          const { data: signInAfterSignUpData, error: signInAfterSignUpError } =
-            await supabase.auth.signInWithPassword({
-              email: devEmail,
-              password: devPassword,
-            });
-
-          if (signInAfterSignUpError) {
-            console.error(
-              "Sign in after signup failed:",
-              signInAfterSignUpError
-            );
-            throw signInAfterSignUpError;
-          }
-
-          console.log(
-            "Successfully signed in after signup:",
-            signInAfterSignUpData
-          );
+          throw new Error("Dev user sign in failed. Please ensure the dev user exists in the database with the correct credentials.");
         } else {
           console.log("Successfully signed in:", signInData);
         }

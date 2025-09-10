@@ -4,6 +4,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AIAssistant, ChatConversation, User } from '@/api/entities';
+import { useUser } from '@/contexts/UserContext';
 import { openaiAdvanced, openaiChat } from '@/api/functions';
 import { chatWithRetrieval } from '@/api/functions/chatWithRetrieval';
 import { chatStandard } from '@/api/functions/chatStandard';
@@ -194,6 +195,7 @@ function ChatMessage({ message, assistantName, handleImageAction }) {
 }
 
 export default function LysaghtAI() {
+  const { currentUser } = useUser();
   const [assistants, setAssistants] = useState([]);
   const [selectedAssistant, setSelectedAssistant] = useState(GENERAL_CHAT_ASSISTANT);
   const [conversations, setConversations] = useState([]);
@@ -202,7 +204,6 @@ export default function LysaghtAI() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingAssistants, setIsLoadingAssistants] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
   const [selectedModel, setSelectedModel] = useState('gpt-4o');
   const [actionType, setActionType] = useState('chat');
   const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -299,39 +300,46 @@ export default function LysaghtAI() {
 
   useEffect(() => {
     (async () => {
+      if (!currentUser) {
+        console.log('LysaghtAI: No current user, skipping initialization');
+        return;
+      }
+
       setIsLoadingAssistants(true);
       try {
-        // Check if we're on localhost and have a localStorage user
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        let user;
+        console.log('LysaghtAI: Loading data for user:', currentUser.email);
         
-        if (isLocalhost) {
-          const localUser = localStorage.getItem('currentUser');
-          if (localUser) {
-            user = JSON.parse(localUser);
-          } else {
-            // Fallback to Supabase authentication for database users
-            user = await User.me();
+        // Try to load AI assistants, but handle the case where the table doesn't exist or has RLS issues
+        try {
+          const assistantData = await AIAssistant.filter({ is_active: true });
+          setAssistants([GENERAL_CHAT_ASSISTANT, ...assistantData.filter(a => a.name !== 'General ChatGPT')]);
+          console.log('LysaghtAI: Loaded assistants successfully:', assistantData.length);
+        } catch (assistantError) {
+          console.warn('LysaghtAI: Could not load AI assistants, using default only:', assistantError.message);
+          // If AI assistants fail to load, just use the general chat assistant
+          setAssistants([GENERAL_CHAT_ASSISTANT]);
+          
+          // Show a less intrusive warning instead of an error toast
+          if (assistantError.message.includes('role') && assistantError.message.includes('does not exist')) {
+            console.warn('LysaghtAI: AI Assistant table may not be set up properly. Using general chat only.');
           }
-        } else {
-          // Production: Use Supabase authentication
-          user = await User.me();
         }
         
-        const assistantData = await AIAssistant.filter({ is_active: true });
-        setCurrentUser(user);
-        setAssistants([GENERAL_CHAT_ASSISTANT, ...assistantData.filter(a => a.name !== 'General ChatGPT')]);
-        
         // Load conversations from localStorage on localhost
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         if (isLocalhost) {
           loadConversationsFromStorage();
         }
       } catch (err) {
-        toast({ title: 'Error', description: `Failed to load initial data: ${err.message}`, variant: 'destructive' });
+        console.error('LysaghtAI: Error loading initial data:', err);
+        // Only show error toast for critical errors, not for missing AI assistants
+        if (!err.message.includes('role') || !err.message.includes('does not exist')) {
+          toast({ title: 'Error', description: `Failed to load initial data: ${err.message}`, variant: 'destructive' });
+        }
       }
       setIsLoadingAssistants(false);
     })();
-  }, [toast, loadConversationsFromStorage]);
+  }, [currentUser, toast, loadConversationsFromStorage]);
 
   useEffect(() => {
     (async () => {
