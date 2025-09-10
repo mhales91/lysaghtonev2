@@ -1063,6 +1063,13 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         setConversations(updatedConversations);
       }
     } catch (err) {
+      console.error('Detailed error in handleSendMessage:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+        cause: err.cause
+      });
+      
       const errorMessage = {
         id: String(Date.now() + 1),
         type: 'error',
