@@ -78,18 +78,26 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const [navRefreshTrigger, setNavRefreshTrigger] = useState(0);
 
   // Function to filter navigation items based on user permissions
-  const filterNavigationItems = (userRole) => {
+  const filterNavigationItems = async (userRole) => {
     if (!userRole) return { navItems: [], adminItems: [] };
 
     // Filter main navigation items based on permissions
-    const navItems = allNavigationItems.filter(item => 
-      hasPermission(userRole, item.title)
-    );
+    const navItems = [];
+    for (const item of allNavigationItems) {
+      const hasAccess = await hasPermission(userRole, item.title);
+      if (hasAccess) {
+        navItems.push(item);
+      }
+    }
 
     // Filter admin navigation items based on permissions
-    const adminItems = adminNavigationItems.filter(item => 
-      hasPermission(userRole, item.title)
-    );
+    const adminItems = [];
+    for (const item of adminNavigationItems) {
+      const hasAccess = await hasPermission(userRole, item.title);
+      if (hasAccess) {
+        adminItems.push(item);
+      }
+    }
 
     return { navItems, adminItems };
   };
@@ -122,7 +130,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setCurrentUser(user);
 
         const userRole = user.user_role || 'Staff';
-        const { navItems, adminItems } = filterNavigationItems(userRole);
+        const { navItems, adminItems } = await filterNavigationItems(userRole);
         setVisibleNavItems(navItems);
         setVisibleAdminItems(adminItems);
 
@@ -141,12 +149,15 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
   // Refresh navigation when permissions might have changed
   useEffect(() => {
-    if (currentUser) {
-      const userRole = currentUser.user_role || 'Staff';
-      const { navItems, adminItems } = filterNavigationItems(userRole);
-      setVisibleNavItems(navItems);
-      setVisibleAdminItems(adminItems);
-    }
+    const refreshNavigation = async () => {
+      if (currentUser) {
+        const userRole = currentUser.user_role || 'Staff';
+        const { navItems, adminItems } = await filterNavigationItems(userRole);
+        setVisibleNavItems(navItems);
+        setVisibleAdminItems(adminItems);
+      }
+    };
+    refreshNavigation();
   }, [navRefreshTrigger, currentUser]);
 
   // Listen for permission changes

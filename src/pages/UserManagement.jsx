@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
 import UserEditForm from '../components/admin/UserEditForm'; // Assuming this component exists
-import { canAccessUserManagement, setGlobalRoleConfigs } from '@/utils/permissions';
+import { canAccessUserManagement, clearPermissionCache } from '@/utils/permissions';
+import { saveRolePermissions, getRolePermissions, initializeDefaultPermissions } from '@/api/rolePermissions';
 import { useUser } from '@/contexts/UserContext';
 
 export default function UserManagementPage() {
@@ -86,25 +87,18 @@ export default function UserManagementPage() {
         'Client': 6
     };
 
-    // Load role configurations from localStorage
-    const loadRoleConfigs = () => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            const saved = localStorage.getItem('roleConfigs');
-            if (saved) {
-                setRoleConfigs(JSON.parse(saved));
-            } else {
-                // Default configurations
-                const defaultConfigs = {
-                    'Admin': allPages,
-                    'Director': allPages,
-                    'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                    'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                    'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-                };
-                setRoleConfigs(defaultConfigs);
-                localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
+    // Load role configurations from database
+    const loadRoleConfigs = async () => {
+        try {
+            const configs = {};
+            for (const role of availableRoles) {
+                const permissions = await getRolePermissions(role);
+                configs[role] = permissions;
             }
+            setRoleConfigs(configs);
+        } catch (error) {
+            console.error('Error loading role configurations:', error);
+            toast.error('Failed to load role configurations');
         }
     };
 
@@ -130,33 +124,20 @@ export default function UserManagementPage() {
         }
     };
 
-    // Role-based page permissions for localhost only
-    const getRolePermissions = (role) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            // If role has a specific configuration, use it; otherwise use default
-            if (roleConfigs[role] && roleConfigs[role].length > 0) {
-                return roleConfigs[role];
-            }
-            // Fallback to default configuration
-            const defaultPermissions = {
-                'Admin': allPages,
-                'Director': allPages,
-                'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-            };
-            return defaultPermissions[role] || [];
+    // Get role permissions from loaded configs
+    const getRolePermissionsFromConfigs = (role) => {
+        if (roleConfigs[role] && roleConfigs[role].length > 0) {
+            return roleConfigs[role];
         }
-        // Fallback for production
-        const permissions = {
+        // Fallback to default configuration
+        const defaultPermissions = {
             'Admin': allPages,
             'Director': allPages,
             'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
             'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
             'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
         };
-        return permissions[role] || [];
+        return defaultPermissions[role] || [];
     };
 
     // Get widget permissions for a role
@@ -204,9 +185,13 @@ export default function UserManagementPage() {
     };
 
     useEffect(() => {
-        loadUsers();
-        loadRoleConfigs();
-        loadWidgetConfigs();
+        const initializeData = async () => {
+            await loadUsers();
+            await initializeDefaultPermissions(); // Initialize database tables
+            await loadRoleConfigs();
+            loadWidgetConfigs();
+        };
+        initializeData();
     }, []);
 
     const loadUsers = async () => {
@@ -293,41 +278,42 @@ export default function UserManagementPage() {
         }
     };
 
-    // Role configuration functions for localhost only
+    // Role configuration functions
     const handleEditRole = (role) => {
         setEditingRole(role);
-        setSelectedPages(getRolePermissions(role));
+        setSelectedPages(getRolePermissionsFromConfigs(role));
         setShowRoleConfig(true);
     };
 
-    const handleSaveRoleConfig = (role, selectedPages) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // Always update the role configs state
-        const updatedConfigs = {
-            ...roleConfigs,
-            [role]: selectedPages
-        };
-        setRoleConfigs(updatedConfigs);
-        
-        // Update global role configs so other components can see the changes
-        setGlobalRoleConfigs(updatedConfigs);
-        
-        if (isLocalhost) {
-            // Save to localStorage on localhost
-            localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-        } else {
-            // On production, we could save to database here if needed
-            // For now, just keep in memory for the session
-            console.log('Role permissions updated for session:', role, selectedPages);
+    const handleSaveRoleConfig = async (role, selectedPages) => {
+        try {
+            // Save to database
+            const result = await saveRolePermissions(role, selectedPages);
+            
+            if (result.success) {
+                // Update the role configs state
+                const updatedConfigs = {
+                    ...roleConfigs,
+                    [role]: selectedPages
+                };
+                setRoleConfigs(updatedConfigs);
+                
+                // Clear permission cache to force refresh
+                clearPermissionCache();
+                
+                toast.success(`Role permissions updated for ${role}`);
+                setShowRoleConfig(false);
+                setEditingRole(null);
+                
+                // Trigger navigation refresh
+                window.dispatchEvent(new CustomEvent('permissionsChanged'));
+            } else {
+                toast.error(`Failed to update role permissions: ${result.error}`);
+            }
+        } catch (error) {
+            console.error('Error saving role permissions:', error);
+            toast.error('Failed to save role permissions');
         }
-        
-        toast.success(`Role permissions updated for ${role}`);
-        setShowRoleConfig(false);
-        setEditingRole(null);
-        
-        // Trigger navigation refresh
-        window.dispatchEvent(new CustomEvent('permissionsChanged'));
     };
 
     // Delete user function for localhost only
@@ -490,7 +476,7 @@ export default function UserManagementPage() {
         
         if (!isLocalhost) return null;
         
-        const accessiblePages = getRolePermissions(user.user_role);
+        const accessiblePages = getRolePermissionsFromConfigs(user.user_role);
         
         return (
             <div className="mt-2">
@@ -666,9 +652,24 @@ export default function UserManagementPage() {
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
                     <p className="text-gray-600">Approve, manage, and assign roles to users.</p>
                     
-                    {/* Debug button for localhost */}
+                    {/* Debug buttons for localhost */}
                     {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-                        <div className="mt-4">
+                        <div className="mt-4 flex gap-2">
+                            <Button 
+                                onClick={async () => {
+                                    console.log('Initializing database permissions...');
+                                    const result = await initializeDefaultPermissions();
+                                    if (result.success) {
+                                        toast.success('Database permissions initialized!');
+                                        await loadRoleConfigs(); // Reload configs
+                                    } else {
+                                        toast.error(`Failed to initialize: ${result.error}`);
+                                    }
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                Initialize Database Permissions
+                            </Button>
                             <Button 
                                 onClick={() => {
                                     const testUser = {
@@ -786,17 +787,17 @@ export default function UserManagementPage() {
                                                                 </Button>
                                                             </div>
                                                             <div className="text-sm text-gray-600">
-                                                                {getRolePermissions(role).length} pages accessible
+                                                                {getRolePermissionsFromConfigs(role).length} pages accessible
                                                             </div>
                                                             <div className="mt-2 flex flex-wrap gap-1">
-                                                                {getRolePermissions(role).slice(0, 3).map(page => (
+                                                                {getRolePermissionsFromConfigs(role).slice(0, 3).map(page => (
                                                                     <span key={page} className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
                                                                         {page}
                                                                     </span>
                                                                 ))}
-                                                                {getRolePermissions(role).length > 3 && (
+                                                                {getRolePermissionsFromConfigs(role).length > 3 && (
                                                                     <span className="text-xs text-gray-500">
-                                                                        +{getRolePermissions(role).length - 3} more
+                                                                        +{getRolePermissionsFromConfigs(role).length - 3} more
                                                                     </span>
                                                                 )}
                                                             </div>
