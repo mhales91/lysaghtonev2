@@ -196,8 +196,13 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       } catch (e) {
         console.log("ProtectedLayout: Authentication error:", e.message);
         console.log("Full error details:", e);
-        // Redirect to login page instead of showing error
-        window.location.href = '/login';
+        console.log("Error stack:", e.stack);
+        
+        // Add a delay before redirecting to allow console inspection
+        console.log("Will redirect to login in 5 seconds...");
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 5000);
         return;
       } finally {
         setIsAuthLoading(false);

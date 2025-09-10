@@ -380,7 +380,7 @@ export class CustomEntity {
  */
 export class UserEntity extends CustomEntity {
   constructor() {
-    super("users", true); // Use service role for user operations to bypass RLS when needed
+    super("users", false); // Use anon client for user operations to maintain user context
   }
 
   /**
@@ -439,9 +439,9 @@ export class UserEntity extends CustomEntity {
 
       console.log("User.me() - Authenticated user found:", { id: user.id, email: user.email });
 
-      // Use admin client (this.supabase) for database operations to bypass RLS
+      // Use regular supabase client for database operations to maintain RLS context
       console.log("User.me() - Querying users table for user ID:", user.id);
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from("users")
         .select("*")
         .eq("id", user.id)
@@ -473,7 +473,7 @@ export class UserEntity extends CustomEntity {
           approval_status: user.email === "dev@localhost.com" ? "approved" : "pending",
         };
 
-        const { data: createdUser, error: createError } = await this.supabase
+        const { data: createdUser, error: createError } = await supabase
           .from("users")
           .insert(newUser)
           .select()
@@ -488,7 +488,7 @@ export class UserEntity extends CustomEntity {
 
       // Ensure dev user is always an admin
       if (user.email === "dev@localhost.com" && data.user_role !== "Admin") {
-        const { data: updatedUser, error: updateError } = await this.supabase
+        const { data: updatedUser, error: updateError } = await supabase
           .from("users")
           .update({ user_role: "Admin", approval_status: "approved" })
           .eq("id", user.id)
@@ -536,7 +536,7 @@ export class UserEntity extends CustomEntity {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data, error } = await this.supabase
+    const { data, error } = await supabase
       .from("users")
       .update({ ...userData, updated_at: new Date().toISOString() })
       .eq("id", user.id)
