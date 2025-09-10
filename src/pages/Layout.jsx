@@ -73,6 +73,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [visibleNavItems, setVisibleNavItems] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [navRefreshTrigger, setNavRefreshTrigger] = useState(0);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -116,6 +117,25 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       }
     };
     fetchUser();
+  }, []);
+
+  // Refresh navigation when permissions might have changed
+  useEffect(() => {
+    if (currentUser) {
+      const userRole = currentUser.user_role || 'Staff';
+      const filteredNav = allNavigationItems.filter(item => item.roles.includes(userRole));
+      setVisibleNavItems(filteredNav);
+    }
+  }, [navRefreshTrigger, currentUser]);
+
+  // Listen for permission changes
+  useEffect(() => {
+    const handlePermissionChange = () => {
+      setNavRefreshTrigger(prev => prev + 1);
+    };
+
+    window.addEventListener('permissionsChanged', handlePermissionChange);
+    return () => window.removeEventListener('permissionsChanged', handlePermissionChange);
   }, []);
 
   const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';

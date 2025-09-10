@@ -17,9 +17,22 @@ const defaultPermissions = {
     'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
 };
 
+// Global role configs that can be updated by UserManagement component
+let globalRoleConfigs = null;
+
+// Set role configs from UserManagement component
+export const setGlobalRoleConfigs = (configs) => {
+    globalRoleConfigs = configs;
+};
+
 // Load role configurations from localStorage (for localhost) or return defaults
 export const getRolePermissions = (role) => {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // First check if we have global configs set by UserManagement component
+    if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
+        return globalRoleConfigs[role];
+    }
     
     if (isLocalhost) {
         const saved = localStorage.getItem('roleConfigs');

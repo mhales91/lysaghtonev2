@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
 import UserEditForm from '../components/admin/UserEditForm'; // Assuming this component exists
-import { canAccessUserManagement } from '@/utils/permissions';
+import { canAccessUserManagement, setGlobalRoleConfigs } from '@/utils/permissions';
 import { useUser } from '@/contexts/UserContext';
 
 export default function UserManagementPage() {
@@ -302,17 +302,32 @@ export default function UserManagementPage() {
 
     const handleSaveRoleConfig = (role, selectedPages) => {
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        // Always update the role configs state
+        const updatedConfigs = {
+            ...roleConfigs,
+            [role]: selectedPages
+        };
+        setRoleConfigs(updatedConfigs);
+        
+        // Update global role configs so other components can see the changes
+        setGlobalRoleConfigs(updatedConfigs);
+        
         if (isLocalhost) {
-            const updatedConfigs = {
-                ...roleConfigs,
-                [role]: selectedPages
-            };
-            setRoleConfigs(updatedConfigs);
+            // Save to localStorage on localhost
             localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-            toast.success(`Role permissions updated for ${role}`);
-            setShowRoleConfig(false);
-            setEditingRole(null);
+        } else {
+            // On production, we could save to database here if needed
+            // For now, just keep in memory for the session
+            console.log('Role permissions updated for session:', role, selectedPages);
         }
+        
+        toast.success(`Role permissions updated for ${role}`);
+        setShowRoleConfig(false);
+        setEditingRole(null);
+        
+        // Trigger navigation refresh
+        window.dispatchEvent(new CustomEvent('permissionsChanged'));
     };
 
     // Delete user function for localhost only
