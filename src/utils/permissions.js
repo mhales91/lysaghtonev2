@@ -56,6 +56,14 @@ export const hasPermission = async (userRole, pageName) => {
 
 // Check if current user can access User Management
 export const canAccessUserManagement = async (userRole) => {
+    console.log('Checking User Management access for role:', userRole);
+    
+    // For now, always allow Admin and Director access regardless of database
+    if (userRole === 'Admin' || userRole === 'Director') {
+        console.log('User has Admin/Director role, allowing access');
+        return true;
+    }
+    
     try {
         return await hasPermission(userRole, 'User Management');
     } catch (error) {

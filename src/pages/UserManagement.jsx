@@ -19,7 +19,7 @@ import {
     allPages,
     allDashboardWidgets
 } from '../api/rolePermissions.js';
-import { clearPermissionCache } from '../utils/permissions.js';
+import { clearPermissionCache, canAccessUserManagement } from '../utils/permissions.js';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
@@ -36,57 +36,8 @@ const UserManagement = () => {
     const [selectedWidgets, setSelectedWidgets] = useState([]);
     const [databaseError, setDatabaseError] = useState(null);
     const [databaseInitialized, setDatabaseInitialized] = useState(false);
-
-    // Get current user
-    const currentUser = User.current;
+    const [currentUser, setCurrentUser] = useState(null);
     const [hasAccess, setHasAccess] = useState(null);
-
-    // Check if user has permission to access User Management
-    useEffect(() => {
-        const checkAccess = async () => {
-            if (!currentUser) {
-                setHasAccess(false);
-                return;
-            }
-            
-            try {
-                const access = await canAccessUserManagement(currentUser.user_role);
-                setHasAccess(access);
-            } catch (error) {
-                console.error('Error checking access:', error);
-                // Fallback: allow Admin and Director access
-                setHasAccess(currentUser.user_role === 'Admin' || currentUser.user_role === 'Director');
-            }
-        };
-        
-        checkAccess();
-    }, [currentUser]);
-
-    if (hasAccess === null) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-100">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Checking permissions...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!hasAccess) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-100">
-                <Card className="w-full max-w-md">
-                    <CardHeader>
-                        <CardTitle className="text-center text-red-600">Access Denied</CardTitle>
-                        <CardDescription className="text-center">
-                            You don't have permission to access this page.
-                        </CardDescription>
-                    </CardHeader>
-                </Card>
-            </div>
-        );
-    }
 
     // Role display names and expected user counts
     const roleDisplayNames = {
@@ -162,25 +113,6 @@ const UserManagement = () => {
         }
     };
 
-    useEffect(() => {
-        const initializeData = async () => {
-            await loadUsers();
-            
-            // Check if database is initialized
-            const tablesExist = await checkTablesExist();
-            if (tablesExist) {
-                setDatabaseInitialized(true);
-                await loadRoleConfigs();
-            } else {
-                setDatabaseError('Database tables not set up. Please run the SQL script in your Supabase dashboard.');
-                console.log('Database tables do not exist yet');
-            }
-            
-        loadWidgetConfigs();
-        };
-        initializeData();
-    }, []);
-
     const loadUsers = async () => {
         setIsLoading(true);
         try {
@@ -209,7 +141,7 @@ const UserManagement = () => {
                 setPendingUsers(pendingUsersData);
             } else {
                 // For production, use the existing logic
-            const usersData = await User.list();
+                const usersData = await User.list();
                 const approvedUsers = usersData.filter(user => user.user_role);
                 const pendingUsersData = usersData.filter(user => !user.user_role);
                 setUsers(approvedUsers);
@@ -222,6 +154,88 @@ const UserManagement = () => {
             setIsLoading(false);
         }
     };
+
+    // Get current user and check access
+    useEffect(() => {
+        const checkAccess = async () => {
+            try {
+                const user = await User.me();
+                setCurrentUser(user);
+                
+                if (!user) {
+                    setHasAccess(false);
+                    return;
+                }
+                
+                console.log('User data:', user);
+                console.log('User role:', user.user_role);
+                
+                try {
+                    const access = await canAccessUserManagement(user.user_role);
+                    console.log('Access check result:', access);
+                    setHasAccess(access);
+                } catch (error) {
+                    console.error('Error checking access:', error);
+                    // Fallback: allow Admin and Director access
+                    const fallbackAccess = user.user_role === 'Admin' || user.user_role === 'Director';
+                    console.log('Using fallback access:', fallbackAccess);
+                    setHasAccess(fallbackAccess);
+                }
+            } catch (error) {
+                console.error('Error getting current user:', error);
+                setHasAccess(false);
+            }
+        };
+        
+        checkAccess();
+    }, []);
+
+    useEffect(() => {
+        const initializeData = async () => {
+            await loadUsers();
+            
+            // Check if database is initialized
+            const tablesExist = await checkTablesExist();
+            if (tablesExist) {
+                setDatabaseInitialized(true);
+                await loadRoleConfigs();
+            } else {
+                setDatabaseError('Database tables not set up. Please run the SQL script in your Supabase dashboard.');
+                console.log('Database tables do not exist yet');
+            }
+            
+            loadWidgetConfigs();
+        };
+        initializeData();
+    }, []);
+
+    // Early returns after all hooks are declared
+    if (hasAccess === null) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Checking permissions...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!hasAccess) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <Card className="w-full max-w-md">
+                    <CardHeader>
+                        <CardTitle className="text-center text-red-600">Access Denied</CardTitle>
+                        <CardDescription className="text-center">
+                            You don't have permission to access this page.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
+            </div>
+        );
+    }
+
 
     const handleRoleChange = async (userId, newRole) => {
         try {
