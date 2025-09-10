@@ -87,15 +87,47 @@ export default function UserManagementPage() {
         'Client': 6
     };
 
-    // Load role configurations from database
+    // Load role configurations from database with localStorage fallback
     const loadRoleConfigs = async () => {
         try {
+            // First try to load from database
             const configs = {};
+            let databaseAvailable = true;
+            
             for (const role of availableRoles) {
-                const permissions = await getRolePermissions(role);
-                configs[role] = permissions;
+                try {
+                    const permissions = await getRolePermissions(role);
+                    configs[role] = permissions;
+                } catch (error) {
+                    console.log(`Database not available for role ${role}, using localStorage fallback`);
+                    databaseAvailable = false;
+                    break;
+                }
             }
-            setRoleConfigs(configs);
+            
+            if (databaseAvailable) {
+                setRoleConfigs(configs);
+                console.log('Loaded role configurations from database');
+            } else {
+                // Fallback to localStorage
+                const saved = localStorage.getItem('roleConfigs');
+                if (saved) {
+                    setRoleConfigs(JSON.parse(saved));
+                    console.log('Loaded role configurations from localStorage (database not available)');
+                } else {
+                    // Use default configurations
+                    const defaultConfigs = {
+                        'Admin': allPages,
+                        'Director': allPages,
+                        'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
+                        'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
+                        'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
+                    };
+                    setRoleConfigs(defaultConfigs);
+                    localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
+                    console.log('Using default role configurations (database not available)');
+                }
+            }
         } catch (error) {
             console.error('Error loading role configurations:', error);
             toast.error('Failed to load role configurations');
@@ -287,7 +319,7 @@ export default function UserManagementPage() {
 
     const handleSaveRoleConfig = async (role, selectedPages) => {
         try {
-            // Save to database
+            // Try to save to database first
             const result = await saveRolePermissions(role, selectedPages);
             
             if (result.success) {
@@ -301,18 +333,48 @@ export default function UserManagementPage() {
                 // Clear permission cache to force refresh
                 clearPermissionCache();
                 
-                toast.success(`Role permissions updated for ${role}`);
+                toast.success(`Role permissions updated for ${role} (saved to database)`);
                 setShowRoleConfig(false);
                 setEditingRole(null);
                 
                 // Trigger navigation refresh
                 window.dispatchEvent(new CustomEvent('permissionsChanged'));
             } else {
-                toast.error(`Failed to update role permissions: ${result.error}`);
+                // Fallback to localStorage if database fails
+                console.log('Database save failed, using localStorage fallback');
+                const updatedConfigs = {
+                    ...roleConfigs,
+                    [role]: selectedPages
+                };
+                setRoleConfigs(updatedConfigs);
+                localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
+                
+                // Clear permission cache to force refresh
+                clearPermissionCache();
+                
+                toast.success(`Role permissions updated for ${role} (saved locally)`);
+                setShowRoleConfig(false);
+                setEditingRole(null);
+                
+                // Trigger navigation refresh
+                window.dispatchEvent(new CustomEvent('permissionsChanged'));
             }
         } catch (error) {
             console.error('Error saving role permissions:', error);
-            toast.error('Failed to save role permissions');
+            // Fallback to localStorage
+            const updatedConfigs = {
+                ...roleConfigs,
+                [role]: selectedPages
+            };
+            setRoleConfigs(updatedConfigs);
+            localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
+            
+            toast.success(`Role permissions updated for ${role} (saved locally - database unavailable)`);
+            setShowRoleConfig(false);
+            setEditingRole(null);
+            
+            // Trigger navigation refresh
+            window.dispatchEvent(new CustomEvent('permissionsChanged'));
         }
     };
 
@@ -663,7 +725,13 @@ export default function UserManagementPage() {
                                         toast.success('Database permissions initialized!');
                                         await loadRoleConfigs(); // Reload configs
                                     } else {
-                                        toast.error(`Failed to initialize: ${result.error}`);
+                                        if (result.needsSqlScript) {
+                                            toast.error('Please run the SQL script in Supabase dashboard first!', {
+                                                description: 'Copy the SQL from initialize-role-permissions.sql and run it in your Supabase SQL editor.'
+                                            });
+                                        } else {
+                                            toast.error(`Failed to initialize: ${result.error}`);
+                                        }
                                     }
                                 }}
                                 className="bg-green-600 hover:bg-green-700 text-white"

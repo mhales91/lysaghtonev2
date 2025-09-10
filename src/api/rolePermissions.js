@@ -162,16 +162,67 @@ export const hasPermission = async (userRole, pageName) => {
 };
 
 /**
+ * Check if the required tables exist
+ */
+export const checkTablesExist = async () => {
+    try {
+        // Try to query the roles table
+        const { error: rolesError } = await supabase
+            .from('roles')
+            .select('id')
+            .limit(1);
+        
+        if (rolesError) {
+            console.log('Roles table does not exist:', rolesError.message);
+            return false;
+        }
+
+        // Try to query the permissions table
+        const { error: permissionsError } = await supabase
+            .from('permissions')
+            .select('id')
+            .limit(1);
+        
+        if (permissionsError) {
+            console.log('Permissions table does not exist:', permissionsError.message);
+            return false;
+        }
+
+        return true;
+    } catch (error) {
+        console.log('Error checking tables:', error);
+        return false;
+    }
+};
+
+/**
  * Initialize default permissions in the database
  */
 export const initializeDefaultPermissions = async () => {
     try {
         console.log('Initializing default permissions...');
         
+        // First check if tables exist
+        const tablesExist = await checkTablesExist();
+        if (!tablesExist) {
+            const errorMsg = 'Database tables do not exist. Please run the SQL script in your Supabase dashboard first.';
+            console.error(errorMsg);
+            return { 
+                success: false, 
+                error: errorMsg,
+                needsSqlScript: true 
+            };
+        }
+        
         // Check if roles exist, if not create them
-        const { data: existingRoles } = await supabase
+        const { data: existingRoles, error: rolesError } = await supabase
             .from('roles')
             .select('name');
+        
+        if (rolesError) {
+            console.error('Error fetching existing roles:', rolesError);
+            return { success: false, error: rolesError.message };
+        }
         
         const existingRoleNames = existingRoles?.map(r => r.name) || [];
         
@@ -189,9 +240,14 @@ export const initializeDefaultPermissions = async () => {
         }
 
         // Check if permissions exist, if not create them
-        const { data: existingPermissions } = await supabase
+        const { data: existingPermissions, error: permissionsError } = await supabase
             .from('permissions')
             .select('name');
+        
+        if (permissionsError) {
+            console.error('Error fetching existing permissions:', permissionsError);
+            return { success: false, error: permissionsError.message };
+        }
         
         const existingPermissionNames = existingPermissions?.map(p => p.name) || [];
         

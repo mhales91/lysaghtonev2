@@ -22,7 +22,7 @@ const defaultPermissions = {
 const permissionCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Get role permissions from database with caching
+// Get role permissions from database with caching and localStorage fallback
 export const getRolePermissions = async (role) => {
     const cacheKey = `permissions_${role}`;
     const cached = permissionCache.get(cacheKey);
@@ -39,9 +39,24 @@ export const getRolePermissions = async (role) => {
         });
         return permissions;
     } catch (error) {
-        console.error('Error fetching role permissions:', error);
-        // Fallback to default permissions
-        console.log(`Using fallback permissions for role: ${role}`);
+        console.error('Error fetching role permissions from database:', error);
+        
+        // Try localStorage fallback
+        try {
+            const saved = localStorage.getItem('roleConfigs');
+            if (saved) {
+                const roleConfigs = JSON.parse(saved);
+                if (roleConfigs[role] && roleConfigs[role].length > 0) {
+                    console.log(`Using localStorage permissions for role: ${role}`);
+                    return roleConfigs[role];
+                }
+            }
+        } catch (localStorageError) {
+            console.error('Error reading from localStorage:', localStorageError);
+        }
+        
+        // Final fallback to default permissions
+        console.log(`Using default permissions for role: ${role}`);
         return defaultPermissions[role] || [];
     }
 };
