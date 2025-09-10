@@ -1,5 +1,4 @@
 // Permission utility functions for dynamic role-based access control
-import { getRolePermissions as dbGetRolePermissions, hasPermission as dbHasPermission } from '../api/rolePermissions.js';
 
 // All available pages
 export const allPages = [
@@ -9,7 +8,7 @@ export const allPages = [
     'TOE Admin', 'Import Jobs'
 ];
 
-// Default role permissions (fallback)
+// Default role permissions
 const defaultPermissions = {
     'Admin': allPages,
     'Director': allPages,
@@ -18,67 +17,49 @@ const defaultPermissions = {
     'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
 };
 
-// Cache for role permissions to avoid repeated database calls
-const permissionCache = new Map();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+// Global role configs that can be updated by UserManagement component
+let globalRoleConfigs = null;
 
-// Get role permissions from database with caching
-export const getRolePermissions = async (role) => {
-    const cacheKey = `permissions_${role}`;
-    const cached = permissionCache.get(cacheKey);
+// Set role configs from UserManagement component
+export const setGlobalRoleConfigs = (configs) => {
+    globalRoleConfigs = configs;
+};
+
+// Load role configurations from localStorage (for localhost) or return defaults
+export const getRolePermissions = (role) => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-        return cached.permissions;
+    // First check if we have global configs set by UserManagement component
+    if (globalRoleConfigs && globalRoleConfigs[role] && globalRoleConfigs[role].length > 0) {
+        return globalRoleConfigs[role];
     }
     
-    try {
-        const permissions = await dbGetRolePermissions(role);
-        permissionCache.set(cacheKey, {
-            permissions,
-            timestamp: Date.now()
-        });
-        return permissions;
-    } catch (error) {
-        console.error('Error fetching role permissions from database:', error);
-        throw error; // Re-throw to let calling code handle it
+    if (isLocalhost) {
+        const saved = localStorage.getItem('roleConfigs');
+        if (saved) {
+            const roleConfigs = JSON.parse(saved);
+            if (roleConfigs[role] && roleConfigs[role].length > 0) {
+                return roleConfigs[role];
+            }
+        }
     }
+    
+    // Fallback to default configuration
+    return defaultPermissions[role] || [];
 };
 
 // Check if a user has permission to access a specific page
-export const hasPermission = async (userRole, pageName) => {
-    try {
-        return await dbHasPermission(userRole, pageName);
-    } catch (error) {
-        console.error('Error checking permission:', error);
-        throw error; // Re-throw to let calling code handle it
-    }
+export const hasPermission = (userRole, pageName) => {
+    const permissions = getRolePermissions(userRole);
+    return permissions.includes(pageName);
 };
 
 // Check if current user can access User Management
-export const canAccessUserManagement = async (userRole) => {
-    console.log('Checking User Management access for role:', userRole);
-    
-    // For now, always allow Admin and Director access regardless of database
-    if (userRole === 'Admin' || userRole === 'Director') {
-        console.log('User has Admin/Director role, allowing access');
-        return true;
-    }
-    
-    try {
-        return await hasPermission(userRole, 'User Management');
-    } catch (error) {
-        console.log('Database not available for permission check, using fallback');
-        // Fallback: Admin and Director roles can access User Management
-        return userRole === 'Admin' || userRole === 'Director';
-    }
+export const canAccessUserManagement = (userRole) => {
+    return hasPermission(userRole, 'User Management');
 };
 
 // Get all pages a user can access
-export const getUserAccessiblePages = async (userRole) => {
-    return await getRolePermissions(userRole);
-};
-
-// Clear permission cache (useful when permissions are updated)
-export const clearPermissionCache = () => {
-    permissionCache.clear();
+export const getUserAccessiblePages = (userRole) => {
+    return getRolePermissions(userRole);
 };

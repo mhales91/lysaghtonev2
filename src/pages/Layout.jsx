@@ -78,37 +78,20 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const [navRefreshTrigger, setNavRefreshTrigger] = useState(0);
 
   // Function to filter navigation items based on user permissions
-  const filterNavigationItems = async (userRole) => {
-    if (!userRole || userRole.trim() === '') {
-      console.log('No valid user role provided for navigation filtering');
-      return { navItems: [], adminItems: [] };
-    }
+  const filterNavigationItems = (userRole) => {
+    if (!userRole) return { navItems: [], adminItems: [] };
 
-    try {
-      // Filter main navigation items based on permissions
-      const navItems = [];
-      for (const item of allNavigationItems) {
-        const hasAccess = await hasPermission(userRole, item.title);
-        if (hasAccess) {
-          navItems.push(item);
-        }
-      }
+    // Filter main navigation items based on permissions
+    const navItems = allNavigationItems.filter(item => 
+      hasPermission(userRole, item.title)
+    );
 
-      // Filter admin navigation items based on permissions
-      const adminItems = [];
-      for (const item of adminNavigationItems) {
-        const hasAccess = await hasPermission(userRole, item.title);
-        if (hasAccess) {
-          adminItems.push(item);
-        }
-      }
+    // Filter admin navigation items based on permissions
+    const adminItems = adminNavigationItems.filter(item => 
+      hasPermission(userRole, item.title)
+    );
 
-      return { navItems, adminItems };
-    } catch (error) {
-      console.error('Error filtering navigation items:', error);
-      // Return empty arrays if database is not available
-      return { navItems: [], adminItems: [] };
-    }
+    return { navItems, adminItems };
   };
 
   useEffect(() => {
@@ -116,14 +99,21 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       try {
         const user = await User.me();
 
-        // For now, if user exists but has no role, just assign Admin role locally
-        if (!user.user_role || user.user_role.trim() === '') {
-          console.log('User has no role, assigning Admin role locally');
-          user.user_role = 'Admin';
+        // Auto-approve existing users who don't have an approval_status set
+        if (!user.approval_status || user.approval_status === null || user.approval_status === undefined) {
+          try {
+            await User.updateMyUserData({
+              approval_status: 'approved',
+              approved_by: 'system',
+              approved_date: new Date().toISOString()
+            });
+            user.approval_status = 'approved';
+          } catch (updateError) {
+            console.error('Failed to auto-approve existing user:', updateError);
+          }
         }
 
-        // Check if user has a valid role
-        if (!user.user_role || user.user_role.trim() === '') {
+        if (user.approval_status !== 'approved') {
           setCurrentUser({ ...user, isPendingApproval: true });
           setIsAuthLoading(false);
           return;
@@ -131,19 +121,10 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
         setCurrentUser(user);
 
-        const userRole = user.user_role || 'Admin';
-        
-        // For now, if database tables don't exist, show all navigation items
-        try {
-          const { navItems, adminItems } = await filterNavigationItems(userRole);
-          setVisibleNavItems(navItems);
-          setVisibleAdminItems(adminItems);
-        } catch (error) {
-          console.log('Database not available, showing all navigation items');
-          // Show all navigation items as fallback
-          setVisibleNavItems(allNavigationItems);
-          setVisibleAdminItems(adminNavigationItems);
-        }
+        const userRole = user.user_role || 'Staff';
+        const { navItems, adminItems } = filterNavigationItems(userRole);
+        setVisibleNavItems(navItems);
+        setVisibleAdminItems(adminItems);
 
       } catch (e) {
         console.log("ProtectedLayout: Authentication error:", e.message);
@@ -160,15 +141,12 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
   // Refresh navigation when permissions might have changed
   useEffect(() => {
-    const refreshNavigation = async () => {
-      if (currentUser) {
-        const userRole = currentUser.user_role || 'Staff';
-        const { navItems, adminItems } = await filterNavigationItems(userRole);
-        setVisibleNavItems(navItems);
-        setVisibleAdminItems(adminItems);
-      }
-    };
-    refreshNavigation();
+    if (currentUser) {
+      const userRole = currentUser.user_role || 'Staff';
+      const { navItems, adminItems } = filterNavigationItems(userRole);
+      setVisibleNavItems(navItems);
+      setVisibleAdminItems(adminItems);
+    }
   }, [navRefreshTrigger, currentUser]);
 
   // Listen for permission changes
