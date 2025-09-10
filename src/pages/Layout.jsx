@@ -116,21 +116,19 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       try {
         const user = await User.me();
 
-        // Auto-approve existing users who don't have an approval_status set
-        if (!user.approval_status || user.approval_status === null || user.approval_status === undefined) {
+        // Auto-approve existing users who don't have a user_role set
+        if (!user.user_role || user.user_role.trim() === '') {
           try {
-            await User.updateMyUserData({
-              approval_status: 'approved',
-              approved_by: 'system',
-              approved_date: new Date().toISOString()
+            await User.updateProfile(user.id, {
+              user_role: 'Admin' // Set default role for existing users
             });
-            user.approval_status = 'approved';
+            user.user_role = 'Admin';
           } catch (updateError) {
             console.error('Failed to auto-approve existing user:', updateError);
           }
         }
 
-        if (user.approval_status !== 'approved') {
+        if (!user.user_role || user.user_role.trim() === '') {
           setCurrentUser({ ...user, isPendingApproval: true });
           setIsAuthLoading(false);
           return;

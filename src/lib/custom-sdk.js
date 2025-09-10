@@ -55,20 +55,20 @@ export class CustomEntity {
    */
   async list(filters = {}) {
     try {
-      let query = this.supabase.from(this.tableName).select("*");
+    let query = this.supabase.from(this.tableName).select("*");
 
       // Apply filters
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
           if (Array.isArray(value)) {
             query = query.in(key, value);
-          } else {
+      } else {
             query = query.eq(key, value);
           }
         }
       });
 
-      const { data, error } = await query;
+    const { data, error } = await query;
       if (error) throw error;
       return data || [];
     } catch (error) {
@@ -82,10 +82,10 @@ export class CustomEntity {
    */
   async get(id) {
     try {
-      const { data, error } = await this.supabase
-        .from(this.tableName)
-        .select("*")
-        .eq("id", id)
+    const { data, error } = await this.supabase
+      .from(this.tableName)
+      .select("*")
+      .eq("id", id)
         .single();
 
       if (error) throw error;
@@ -102,10 +102,10 @@ export class CustomEntity {
   async create(record) {
     try {
       const { data, error } = await this.supabase
-        .from(this.tableName)
+      .from(this.tableName)
         .insert(record)
-        .select()
-        .single();
+      .select()
+      .single();
 
       if (error) throw error;
       return data;
@@ -121,9 +121,9 @@ export class CustomEntity {
   async update(id, updates) {
     try {
       const { data, error } = await this.supabase
-        .from(this.tableName)
+      .from(this.tableName)
         .update(updates)
-        .eq("id", id)
+      .eq("id", id)
         .select()
         .single();
 
@@ -140,10 +140,10 @@ export class CustomEntity {
    */
   async delete(id) {
     try {
-      const { error } = await this.supabase
-        .from(this.tableName)
-        .delete()
-        .eq("id", id);
+    const { error } = await this.supabase
+      .from(this.tableName)
+      .delete()
+      .eq("id", id);
 
       if (error) throw error;
       return { success: true };
@@ -262,8 +262,8 @@ export class UserEntity extends CustomEntity {
 
       // Get user profile from users table
       const { data: profile, error: profileError } = await this.supabase
-        .from("users")
-        .select("*")
+      .from("users")
+      .select("*")
         .eq("uuid", user.id)
         .single();
 
@@ -304,7 +304,7 @@ export class UserEntity extends CustomEntity {
       if (authError) throw authError;
 
       // Create user profile
-      const newUser = {
+        const newUser = {
         uuid: authData.user.id,
         email: authData.user.email,
         user_role: user_role || null,
@@ -312,13 +312,13 @@ export class UserEntity extends CustomEntity {
         first_name: first_name || null,
         last_name: last_name || null,
         department: department || null,
-      };
+        };
 
-      const { data: createdUser, error: createError } = await this.supabase
-        .from("users")
-        .insert(newUser)
-        .select()
-        .single();
+        const { data: createdUser, error: createError } = await this.supabase
+          .from("users")
+          .insert(newUser)
+          .select()
+          .single();
 
       if (createError) throw createError;
 
@@ -335,10 +335,10 @@ export class UserEntity extends CustomEntity {
   async updateProfile(userId, updates) {
     try {
       const { data: updatedUser, error: updateError } = await this.supabase
-        .from("users")
+      .from("users")
         .update(updates)
         .eq("id", userId)
-        .select()
+      .select()
         .single();
 
       if (updateError) throw updateError;
@@ -355,10 +355,10 @@ export class UserEntity extends CustomEntity {
   async getByRole(role) {
     try {
       return await this.list({ user_role: role });
-    } catch (error) {
+      } catch (error) {
       console.error(`Error getting users by role ${role}:`, error);
-      throw error;
-    }
+        throw error;
+      }
   }
 
   /**
@@ -371,7 +371,7 @@ export class UserEntity extends CustomEntity {
         .select("*")
         .or("user_role.is.null,user_role.eq.");
 
-      if (error) throw error;
+    if (error) throw error;
       return data || [];
     } catch (error) {
       console.error("Error getting pending users:", error);
@@ -412,7 +412,7 @@ function createEntitiesProxy() {
       
       // Return appropriate entity instance (default to regular client, not service role)
       const entity = entityName === 'User' ? new UserEntity() : new CustomEntity(tableName, false);
-      return entity;
+        return entity;
     }
   });
 }
@@ -457,7 +457,7 @@ export function createCustomClient() {
           // });
 
           // Mock response for now
-          return {
+            return {
             success: true,
             response: `Mock LLM response to: "${prompt}"`,
             usage: {

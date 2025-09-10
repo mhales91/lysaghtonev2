@@ -37,6 +37,9 @@ const UserManagement = () => {
     const [databaseError, setDatabaseError] = useState(null);
     const [databaseInitialized, setDatabaseInitialized] = useState(false);
 
+    // Get current user
+    const currentUser = User.current;
+
     // Check if user has permission to access User Management
     if (!currentUser || !canAccessUserManagement(currentUser.user_role)) {
         return (
@@ -52,9 +55,6 @@ const UserManagement = () => {
             </div>
         );
     }
-
-    // Get current user
-    const currentUser = User.current;
 
     // Role display names and expected user counts
     const roleDisplayNames = {
@@ -144,7 +144,7 @@ const UserManagement = () => {
                 console.log('Database tables do not exist yet');
             }
             
-            loadWidgetConfigs();
+        loadWidgetConfigs();
         };
         initializeData();
     }, []);
@@ -155,7 +155,7 @@ const UserManagement = () => {
             // Check if we're on localhost
             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             console.log('🔍 loadUsers - isLocalhost:', isLocalhost);
-
+            
             if (isLocalhost) {
                 // For localhost, get users from the users table
                 const usersData = await User.list();
@@ -177,7 +177,7 @@ const UserManagement = () => {
                 setPendingUsers(pendingUsersData);
             } else {
                 // For production, use the existing logic
-                const usersData = await User.list();
+            const usersData = await User.list();
                 const approvedUsers = usersData.filter(user => user.user_role);
                 const pendingUsersData = usersData.filter(user => !user.user_role);
                 setUsers(approvedUsers);
@@ -273,21 +273,21 @@ const UserManagement = () => {
             
             if (result.success) {
                 // Update the role configs state
-                const updatedConfigs = {
-                    ...roleConfigs,
-                    [role]: selectedPages
-                };
-                setRoleConfigs(updatedConfigs);
-                
+        const updatedConfigs = {
+            ...roleConfigs,
+            [role]: selectedPages
+        };
+        setRoleConfigs(updatedConfigs);
+        
                 // Clear permission cache to force refresh
                 clearPermissionCache();
-                
-                toast.success(`Role permissions updated for ${role}`);
-                setShowRoleConfig(false);
-                setEditingRole(null);
-                
-                // Trigger navigation refresh
-                window.dispatchEvent(new CustomEvent('permissionsChanged'));
+        
+        toast.success(`Role permissions updated for ${role}`);
+        setShowRoleConfig(false);
+        setEditingRole(null);
+        
+        // Trigger navigation refresh
+        window.dispatchEvent(new CustomEvent('permissionsChanged'));
             } else {
                 toast.error(`Failed to update role permissions: ${result.error}`);
             }
@@ -448,7 +448,7 @@ const UserManagement = () => {
                                         >
                                             Edit Widgets
                                         </Button>
-                                    </div>
+                    </div>
                                 </CardContent>
                             </Card>
                         );
@@ -462,14 +462,14 @@ const UserManagement = () => {
                     </TabsList>
 
                     <TabsContent value="approved" className="mt-6">
-                        <Card>
+                <Card>
                             <CardHeader>
                                 <CardTitle>Approved Users</CardTitle>
                                 <CardDescription>
                                     Users with assigned roles who can access the system.
                                 </CardDescription>
                             </CardHeader>
-                            <CardContent>
+                    <CardContent>
                                 {users.length === 0 ? (
                                     <p className="text-gray-500 text-center py-8">No approved users found.</p>
                                 ) : (
@@ -499,7 +499,7 @@ const UserManagement = () => {
                                                         </SelectTrigger>
                                                         <SelectContent>
                                                             <SelectItem value="">Pending</SelectItem>
-                                                            {availableRoles.map(role => (
+                                                    {availableRoles.map(role => (
                                                                 <SelectItem key={role} value={role}>
                                                                     {roleDisplayNames[role]}
                                                                 </SelectItem>
@@ -507,13 +507,13 @@ const UserManagement = () => {
                                                         </SelectContent>
                                                     </Select>
                                                     {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
-                                                        <Button
+                                                                <Button
                                                             variant="destructive"
-                                                            size="sm"
+                                                                    size="sm"
                                                             onClick={() => handleDeleteUser(user)}
-                                                        >
+                                                                >
                                                             Delete
-                                                        </Button>
+                                                                </Button>
                                                     )}
                                                 </div>
                                             </div>
@@ -546,8 +546,8 @@ const UserManagement = () => {
                                                     <p className="text-sm text-gray-500">{user.email}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
+                                                                <Button
+                                                                    variant="outline"
                                                         onClick={() => handleApproveUser(user.id)}
                                                     >
                                                         Approve
@@ -557,14 +557,14 @@ const UserManagement = () => {
                                                         onClick={() => handleRejectUser(user.id)}
                                                     >
                                                         Reject
-                                                    </Button>
+                                                                </Button>
                                                 </div>
                                             </div>
                                         ))}
-                                    </div>
+                                                    </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                    </CardContent>
+                </Card>
                     </TabsContent>
                 </Tabs>
 
