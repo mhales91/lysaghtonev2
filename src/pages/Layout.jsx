@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import GlobalSearch from "@/components/layout/GlobalSearch";
 import { UserProvider } from '@/contexts/UserContext';
-import { getUserAccessiblePages, canAccessUserManagement } from '@/utils/permissions';
+import { canAccessUserManagement, hasPermission } from '@/utils/permissions';
 import {
   LayoutDashboard,
   Users,
@@ -45,6 +45,7 @@ import { User } from '@/api/entities';
 import { useEffect, useState } from 'react';
 import { PageLoadingSkeleton } from '@/components/ui/loading-states';
 
+// Navigation items without hardcoded roles - permissions will be checked dynamically
 const allNavigationItems = [
   { title: "Dashboard", url: createPageUrl("Dashboard"), icon: LayoutDashboard },
   { title: "AI Assistant", url: createPageUrl("AIAssistant"), icon: Sparkles },
@@ -52,16 +53,15 @@ const allNavigationItems = [
   { title: "TOE Manager", url: createPageUrl("TOEManager"), icon: FileText },
   { title: "Projects", url: createPageUrl("Projects"), icon: FolderOpen },
   { title: "Timesheets", url: createPageUrl("Timesheets"), icon: Clock },
-  { title: "Lysaght AI", url: createPageUrl("LysaghtAI"), icon: Briefcase },
+  { title: "Lysaght AI", url: createPageUrl("LysaghtAI"), icon: Sparkles },
   { title: "Billing", url: createPageUrl("Billing"), icon: CreditCard },
   { title: "Analytics", url: createPageUrl("Analytics"), icon: BarChart3 },
-  { title: "Task Templates", url: createPageUrl("TaskTemplates"), icon: List },
-  { title: "Company Settings", url: createPageUrl("AdminSettings"), icon: Settings }
 ];
 
 const adminNavigationItems = [
-  { title: "User Management", url: createPageUrl("UserManagement"), icon: Users },
-  { title: "AI Assistant Manager", url: createPageUrl("AIAssistantManager"), icon: Cog },
+  { title: "Task Templates", url: createPageUrl("TaskTemplates"), icon: List },
+  { title: "Company Settings", url: createPageUrl("AdminSettings"), icon: Cog },
+  { title: "User Management", url: createPageUrl("UserManagement"), icon: Briefcase },
   { title: "Billing Settings", url: createPageUrl("BillingAdmin"), icon: DollarSign },
   { title: "Analytics Settings", url: createPageUrl("AnalyticsSettings"), icon: Settings },
   { title: "Prompt Library", url: createPageUrl("PromptLibraryManager"), icon: BookText },
@@ -73,9 +73,26 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const location = useLocation();
   const [currentUser, setCurrentUser] = useState(null);
   const [visibleNavItems, setVisibleNavItems] = useState([]);
+  const [visibleAdminItems, setVisibleAdminItems] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [navRefreshTrigger, setNavRefreshTrigger] = useState(0);
-  const [canAccessUserMgmt, setCanAccessUserMgmt] = useState(false);
+
+  // Function to filter navigation items based on user permissions
+  const filterNavigationItems = (userRole) => {
+    if (!userRole) return { navItems: [], adminItems: [] };
+
+    // Filter main navigation items based on permissions
+    const navItems = allNavigationItems.filter(item => 
+      hasPermission(userRole, item.title)
+    );
+
+    // Filter admin navigation items based on permissions
+    const adminItems = adminNavigationItems.filter(item => 
+      hasPermission(userRole, item.title)
+    );
+
+    return { navItems, adminItems };
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -84,30 +101,30 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
         // Auto-approve existing users who don't have an approval_status set
         if (!user.approval_status || user.approval_status === null || user.approval_status === undefined) {
-          console.log("Auto-approving user:", user.email);
-          await User.update(user.id, {
-            approval_status: 'approved',
-            approved_by: 'system',
-            approved_date: new Date().toISOString()
-          });
-          user.approval_status = 'approved';
+          try {
+            await User.updateMyUserData({
+              approval_status: 'approved',
+              approved_by: 'system',
+              approved_date: new Date().toISOString()
+            });
+            user.approval_status = 'approved';
+          } catch (updateError) {
+            console.error('Failed to auto-approve existing user:', updateError);
+          }
+        }
+
+        if (user.approval_status !== 'approved') {
+          setCurrentUser({ ...user, isPendingApproval: true });
+          setIsAuthLoading(false);
+          return;
         }
 
         setCurrentUser(user);
 
-        // Load user's accessible pages from database
-        const accessiblePages = await getUserAccessiblePages(user.id);
-        console.log('User accessible pages:', accessiblePages);
-        
-        // Filter navigation items based on accessible pages
-        const filteredNav = allNavigationItems.filter(item => 
-          accessiblePages.includes(item.title)
-        );
-        setVisibleNavItems(filteredNav);
-
-        // Check if user can access user management
-        const canAccess = canAccessUserManagement(user.user_role);
-        setCanAccessUserMgmt(canAccess);
+        const userRole = user.user_role || 'Staff';
+        const { navItems, adminItems } = filterNavigationItems(userRole);
+        setVisibleNavItems(navItems);
+        setVisibleAdminItems(adminItems);
 
       } catch (e) {
         console.log("ProtectedLayout: Authentication error:", e.message);
@@ -119,32 +136,17 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setIsAuthLoading(false);
       }
     };
-
     fetchUser();
   }, []);
 
   // Refresh navigation when permissions might have changed
   useEffect(() => {
-    const refreshNavigation = async () => {
-      if (currentUser) {
-        try {
-          const accessiblePages = await getUserAccessiblePages(currentUser.id);
-          console.log('Refreshed accessible pages:', accessiblePages);
-          
-          const filteredNav = allNavigationItems.filter(item => 
-            accessiblePages.includes(item.title)
-          );
-          setVisibleNavItems(filteredNav);
-
-          const canAccess = await canAccessUserManagement(currentUser.id);
-          setCanAccessUserMgmt(canAccess);
-        } catch (error) {
-          console.error('Error refreshing navigation:', error);
-        }
-      }
-    };
-
-    refreshNavigation();
+    if (currentUser) {
+      const userRole = currentUser.user_role || 'Staff';
+      const { navItems, adminItems } = filterNavigationItems(userRole);
+      setVisibleNavItems(navItems);
+      setVisibleAdminItems(adminItems);
+    }
   }, [navRefreshTrigger, currentUser]);
 
   // Listen for permission changes
@@ -154,36 +156,67 @@ const ProtectedLayout = ({ children, currentPageName }) => {
     };
 
     window.addEventListener('permissionsChanged', handlePermissionChange);
-    return () => {
-      window.removeEventListener('permissionsChanged', handlePermissionChange);
-    };
+    return () => window.removeEventListener('permissionsChanged', handlePermissionChange);
   }, []);
 
-  const handleLogout = async () => {
-    try {
-      await User.logout();
-      window.location.href = '/login';
-    } catch (error) {
-      console.error('Logout error:', error);
-      // Force redirect even if logout fails
-      window.location.href = '/login';
-    }
-  };
+  const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';
+  const canAccessUserMgmt = currentUser ? canAccessUserManagement(currentUser.user_role) : false;
 
   if (isAuthLoading) {
-    return <PageLoadingSkeleton />;
+    return <PageLoadingSkeleton title="Authenticating..." />;
   }
 
-  if (!currentUser) {
-    return <PageLoadingSkeleton />;
-  }
 
-  const isAdmin = currentUser.user_role === 'Admin' || currentUser.user_role === 'Director';
+  // Show pending approval screen
+  if (currentUser?.isPendingApproval) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <Card className="w-full max-w-md mx-auto">
+          <CardContent className="text-center p-8">
+            <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-yellow-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Account Pending Approval</h2>
+            <p className="text-gray-600 mb-4">
+              Your account has been created successfully. Please wait for an administrator to approve your access to the Lysaght One platform.
+            </p>
+            <div className="text-sm text-gray-500 mb-6">
+              <p><strong>Name:</strong> {currentUser.full_name}</p>
+              <p><strong>Email:</strong> {currentUser.email}</p>
+              <p><strong>Status:</strong> {currentUser.approval_status}</p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                await User.logout();
+                window.location.reload();
+              }}
+            >
+              Sign Out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <UserProvider currentUser={currentUser}>
+    <ErrorBoundary>
       <SidebarProvider>
-        <div className="flex h-screen bg-gray-50">
+        <style>
+          {`
+            :root {
+              --lysaght-primary: #5E0F68;
+              --lysaght-primary-light: #7B1E7E;
+              --lysaght-background: #faf9fb;
+              --lysaght-surface: #ffffff;
+              --lysaght-border: #e5e7eb;
+              --lysaght-text: #1f2937;
+              --lysaght-text-light: #6b7280;
+            }
+          `}
+        </style>
+        <div className="min-h-screen flex w-full" style={{ backgroundColor: 'var(--lysaght-background)' }}>
           <Sidebar className="border-r" style={{ borderColor: 'var(--lysaght-border)' }}>
             <SidebarHeader className="border-b p-6" style={{ borderColor: 'var(--lysaght-border)' }}>
               <div className="flex items-center gap-3">
@@ -231,14 +264,14 @@ const ProtectedLayout = ({ children, currentPageName }) => {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {(isAdmin || canAccessUserMgmt) && (
+              {visibleAdminItems.length > 0 && (
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider px-2 py-3" style={{ color: 'var(--lysaght-text-light)' }}>
                     Admin
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {adminNavigationItems.map((item) => (
+                      {visibleAdminItems.map((item) => (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton
                             asChild
@@ -260,59 +293,151 @@ const ProtectedLayout = ({ children, currentPageName }) => {
               )}
             </SidebarContent>
 
-            <SidebarFooter className="p-4 border-t" style={{ borderColor: 'var(--lysaght-border)' }}>
-              <Card className="bg-gray-50 border-0">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white text-sm font-semibold">
-                      {currentUser.full_name?.charAt(0) || currentUser.email?.charAt(0) || 'U'}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {currentUser.full_name || 'User'}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate">
-                        {currentUser.user_role || 'Staff'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLogout}
-                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
-                  >
-                    Logout
-                  </Button>
-                </CardContent>
-              </Card>
+            <SidebarFooter className="border-t p-6" style={{ borderColor: 'var(--lysaght-border)' }}>
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
+                  style={{ backgroundColor: 'var(--lysaght-text-light)' }}
+                >
+                  {currentUser?.full_name?.substring(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--lysaght-text)' }}>
+                    {currentUser?.full_name}
+                  </p>
+                  <p className="text-xs truncate" style={{ color: 'var(--lysaght-text-light)' }}>
+                    {currentUser?.email}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    await User.logout();
+                    // Clear any localStorage data
+                    localStorage.removeItem('currentUser');
+                    localStorage.removeItem('pendingUsers');
+                    localStorage.removeItem('approvedUsers');
+                    // Redirect to login
+                    window.location.href = '/login';
+                  } catch (error) {
+                    console.error('Logout error:', error);
+                    // Force redirect even if logout fails
+                    window.location.href = '/login';
+                  }
+                }}
+              >
+                Sign Out
+              </Button>
             </SidebarFooter>
           </Sidebar>
 
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <header className="bg-white border-b px-6 py-4" style={{ borderColor: 'var(--lysaght-border)' }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger className="lg:hidden" />
-                  <h1 className="text-2xl font-bold" style={{ color: 'var(--lysaght-text)' }}>
-                    {currentPageName || 'Dashboard'}
-                  </h1>
-                </div>
+          <main className="flex-1 flex flex-col overflow-hidden">
+            {/* Mobile header with search */}
+            <header
+              className="bg-white border-b px-6 py-4 md:hidden flex items-center gap-4"
+              style={{ borderColor: 'var(--lysaght-border)' }}
+            >
+              <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors duration-200">
+                <Menu className="w-5 h-5" />
+              </SidebarTrigger>
+              <h1 className="text-xl font-bold flex-1" style={{ color: 'var(--lysaght-text)' }}>
+                Lysaght One
+              </h1>
+              <div className="flex-shrink-0">
                 <GlobalSearch />
               </div>
             </header>
 
-            <main className="flex-1 overflow-auto">
+            {/* Desktop header with search - only show on larger screens */}
+            <header className="bg-white border-b px-6 py-3 hidden md:flex items-center justify-end"
+                    style={{ borderColor: 'var(--lysaght-border)' }}>
+              <GlobalSearch />
+            </header>
+
+            {/* Main content area */}
+            <div className="flex-1 overflow-auto">
               <ErrorBoundary>
-                {children}
+                <UserProvider currentUser={currentUser}>
+                  {children}
+                </UserProvider>
               </ErrorBoundary>
-            </main>
-          </div>
+            </div>
+          </main>
         </div>
-        <Toaster />
+
+        {/* Toast notifications for better UX */}
+        <Toaster
+          position="top-right"
+          expand={false}
+          richColors
+          closeButton
+        />
       </SidebarProvider>
-    </UserProvider>
+    </ErrorBoundary>
   );
 };
 
-export default ProtectedLayout;
+export default function Layout({ children, currentPageName }) {
+  const isPublicPage = currentPageName === 'TOESign';
+
+  if (isPublicPage) {
+    return (
+      <ErrorBoundary>
+        <div className="min-h-screen bg-gray-50">
+          <style>
+            {`
+              :root {
+                --lysaght-primary: #5E0F68;
+                --lysaght-primary-light: #7B1E7E;
+                --lysaght-background: #faf9fb;
+                --lysaght-surface: #ffffff;
+                --lysaght-border: #e5e7eb;
+                --lysaght-text: #1f2937;
+                --lysaght-text-light: #6b7280;
+              }
+            `}
+          </style>
+
+          {/* Minimal header for TOE signing */}
+          <header className="bg-white border-b border-gray-200 px-6 py-4">
+            <div className="flex items-center">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold mr-3"
+                style={{ backgroundColor: 'var(--lysaght-primary)' }}
+              >
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h1 className="font-bold text-lg" style={{ color: 'var(--lysaght-text)' }}>
+                  Lysaght Consultants Limited
+                </h1>
+                <p className="text-sm" style={{ color: 'var(--lysaght-text-light)' }}>
+                  Terms of Engagement
+                </p>
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1">
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
+          </main>
+
+          <Toaster
+            position="top-right"
+            expand={false}
+            richColors
+            closeButton
+          />
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
+  return <ProtectedLayout currentPageName={currentPageName}>{children}</ProtectedLayout>;
+}
