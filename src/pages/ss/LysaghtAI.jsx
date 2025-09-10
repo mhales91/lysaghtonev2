@@ -4,9 +4,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AIAssistant, ChatConversation, User } from '@/api/entities';
-import { openaiAdvanced } from '@/api/functions';
-import { chatWithRetrieval } from '@/api/functions/chatWithRetrieval';
-import { chatStandard } from '@/api/functions/chatStandard';
+// Remove problematic imports that cause 'rt' error on Vercel
+import { 
+  openaiAdvanced as realOpenaiAdvanced, 
+  openaiChat as realOpenaiChat, 
+  chatWithRetrieval as realChatWithRetrieval, 
+  chatStandard as realChatStandard 
+} from '@/api/openaiFunctions';
 import { UploadFile } from '@/api/integrations';
 import { Bot, Send, User as UserIcon, Sparkles, MessageCircle, Trash2, Paperclip, X, BookText, Edit2, Loader } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
@@ -277,11 +281,12 @@ export default function LysaghtAI() {
         const hint = (selectedAssistant.system_prompt || '') +
           `\n\n[Meta instruction: The active OpenAI model id for this chat is "${effectiveModel}". If the user asks what model you are, answer exactly "${effectiveModel}".]`;
 
-        const apiResponse = await openaiAdvanced({
+        const apiResponse = await realOpenaiAdvanced({
           prompt: userMessage.content,
           model: effectiveModel,
           action: actionType,
           systemPrompt: hint,
+          history: messages,
           fileUrls: fileUrls.length ? fileUrls : undefined
         });
         responseData = apiResponse.data;
@@ -298,7 +303,7 @@ export default function LysaghtAI() {
 
         let apiResponse;
         if (useRetrieval) {
-          apiResponse = await chatWithRetrieval({
+          apiResponse = await realChatWithRetrieval({
             message: userMessage.content,
             history: messages,
             assistantConfig: {
@@ -309,7 +314,7 @@ export default function LysaghtAI() {
             fileUrls: fileUrls.length ? fileUrls : undefined
           });
         } else {
-          apiResponse = await chatStandard({
+          apiResponse = await realChatStandard({
             message: userMessage.content,
             history: messages,
             assistantConfig: safeAssistant,
