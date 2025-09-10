@@ -1038,7 +1038,10 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
       // Handle conversation saving
       // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       if (currentConversation) {
-        // Update existing conversation
+        // Update existing conversation in database
+        await ChatConversation.update(currentConversation.id, conversationData);
+        
+        // Update local state
         const updatedConversation = {
           ...currentConversation,
           ...conversationData,
@@ -1051,9 +1054,6 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           conv.id === currentConversation.id ? updatedConversation : conv
         );
         setConversations(updatedConversations);
-        
-        // Save messages to localStorage
-        // saveMessagesToStorage(currentConversation.id, finalMessages);
       } else {
         // Create new conversation
         const conversationTitle = generateConversationTitle(userMessage.content);
@@ -1063,9 +1063,6 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         // Add to conversations list
         const updatedConversations = [newConversation, ...conversations];
         setConversations(updatedConversations);
-        
-        // Save messages to localStorage
-        // saveMessagesToStorage(conversationId, finalMessages);
       }
     } catch (err) {
       const errorMessage = {
