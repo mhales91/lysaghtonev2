@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from "react";
 import { 
   Project, 
@@ -27,85 +26,98 @@ import SLATracker from "../components/dashboard/widgets/SLATracker";
 import ProjectPortfolio from "../components/dashboard/widgets/ProjectPortfolio";
 import UpcomingProjects from "../components/dashboard/widgets/UpcomingProjects";
 import BudgetWidget from "../components/dashboard/widgets/BudgetWidget";
-import { getNZFinancialYear } from '../components/utils/dateUtils';
-
 
 export default function Dashboard() {
-  const [loggedInUser, setLoggedInUser] = useState(null);
-  const [viewLevel, setViewLevel] = useState('staff');
-  const [allUsers, setAllUsers] = useState([]);
-  const [allDepartments, setAllDepartments] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [clients, setClients] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dateRange, setDateRange] = useState(null);
   const [timeEntries, setTimeEntries] = useState([]);
-  const [toes, setTOEs] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [toes, setToes] = useState([]);
+  const [clients, setClients] = useState([]);
   const [dashboardSettings, setDashboardSettings] = useState(null);
   const [analyticsSettings, setAnalyticsSettings] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Date range state - default to current month for faster initial load
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    return { from: startOfMonth(now), to: endOfMonth(now) };
-  });
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
+  const [selectedUser, setSelectedUser] = useState('all');
 
+  // Load user data
   useEffect(() => {
-    // Load static, non-date-dependent data on initial mount
-    const loadStaticData = async () => {
-      // setIsLoading(true); // Already true by default
+    const loadUser = async () => {
       try {
         const user = await User.me();
-        setLoggedInUser(user);
-        
-        // Set default view level based on role
-        const defaultLevel = user.user_role === 'Director' || user.user_role === 'Admin' ? 'director' :
-                            user.user_role === 'Manager' || user.user_role === 'DeptLead' ? 'manager' : 'staff';
-        setViewLevel(defaultLevel);
+        setCurrentUser(user);
+      } catch (error) {
+        console.error('Error loading user:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-        const currentFY = getNZFinancialYear(new Date()).startDate.getFullYear();
+    loadUser();
+  }, []);
 
-        // Load static data concurrently, filtering for active items only to improve performance
-        const [users, projectsData, clientsData, toesData, settingsList, analyticsSettingsList] = await Promise.all([
-          User.list(),
-          Project.filter({ status: { $ne: 'archived' } }, '-created_date'), // Only fetch non-archived projects
-          Client.list(), // Keep fetching all clients as they are needed for project context
-          TOE.filter({ status: { $ne: 'signed' } }, '-created_date'), // Only fetch non-signed TOEs
-          DashboardSettings.list(),
-          AnalyticsSetting.list()
+  // Load dashboard settings
+  useEffect(() => {
+    const loadDashboardSettings = async () => {
+      try {
+        const settings = await DashboardSettings.list();
+        if (settings && settings.length > 0) {
+          setDashboardSettings(settings[0]);
+        }
+      } catch (error) {
+        console.error('Error loading dashboard settings:', error);
+      }
+    };
+
+    loadDashboardSettings();
+  }, []);
+
+  // Load analytics settings
+  useEffect(() => {
+    const loadAnalyticsSettings = async () => {
+      try {
+        const settings = await AnalyticsSetting.list();
+        if (settings && settings.length > 0) {
+          setAnalyticsSettings(settings[0]);
+        }
+      } catch (error) {
+        console.error('Error loading analytics settings:', error);
+      }
+    };
+
+    loadAnalyticsSettings();
+  }, []);
+
+  // Load static dashboard data
+  useEffect(() => {
+    const loadStaticData = async () => {
+      try {
+        const [projectsData, invoicesData, toesData, clientsData] = await Promise.all([
+          Project.list('-created_date', 50),
+          Invoice.list('-created_date', 50),
+          TOE.list('-created_date', 50),
+          Client.list('-created_date', 50)
         ]);
-
-        setAllUsers(users);
+        
         setProjects(projectsData || []);
+        setInvoices(invoicesData || []);
+        setToes(toesData || []);
         setClients(clientsData || []);
-        setTOEs(toesData || []);
-        setDashboardSettings(settingsList.length > 0 ? settingsList[0] : null);
-        setAnalyticsSettings(analyticsSettingsList.length > 0 ? analyticsSettingsList[0] : null);
-
-        const depts = [...new Set(users.map(u => u.department).filter(Boolean))];
-        setAllDepartments(depts);
-
       } catch (error) {
         console.error('Error loading static dashboard data:', error);
-        setIsLoading(false); // If static data fails, stop loading
       }
-      // Note: isLoading is NOT set to false here. It will be handled by the time-sensitive loader
-      // once loggedInUser is set and time-sensitive data is fetched. This ensures spinner until all initial data is ready.
     };
-    
+
     loadStaticData();
-  }, []); // Empty dependency array means this runs only once on component mount
+  }, []);
 
+  // Load time entries based on date range
   useEffect(() => {
-    // Load time-sensitive data when date range changes or after loggedInUser is set by the static load
-    if (!loggedInUser || !dateRange) { // Added check for !dateRange
-      // Only proceed if loggedInUser is available and dateRange is set
-      return;
-    }
-
-    const loadTimeSensitiveData = async () => {
-      setIsLoading(true); // Set loading to true while fetching time-sensitive data
+    const loadTimeEntries = async () => {
+      if (!dateRange?.from || !dateRange?.to) return;
+      
       try {
-        // Add safety checks for dateRange properties
         const from = dateRange?.from ? new Date(dateRange.from) : null;
         const to = dateRange?.to ? new Date(dateRange.to) : null;
 
@@ -116,7 +128,7 @@ export default function Dashboard() {
           
           // Use TimeEntry entity with service role client to bypass RLS
           const timeEntriesData = await TimeEntry.filter({
-            start_time: {
+            date: {  // Fixed: use date, not start_time
               $gte: fromDateStr,
               $lte: toDateStr
             }
@@ -133,307 +145,201 @@ export default function Dashboard() {
         }
       } catch (error) {
         console.error('Error loading time entries for date range:', error);
-      } finally {
-        setIsLoading(false); // Always set loading to false after attempt (success or fail)
+        setTimeEntries([]);
       }
     };
 
-    loadTimeSensitiveData();
-  }, [dateRange, loggedInUser]); // Reruns when dateRange or loggedInUser state changes
+    loadTimeEntries();
+  }, [dateRange]);
 
-  // Filter data based on current view level and user role
-  const contextualData = useMemo(() => {
-    // Return empty data if loggedInUser is not yet available, to prevent errors in widgets
-    if (!loggedInUser) return { projects: [], clients: [], timeEntries: [], users: [], toes: [] };
+  // Get filtered data based on selected filters
+  const filteredData = useMemo(() => {
+    let filteredTimeEntries = timeEntries;
+    let filteredProjects = projects;
+    let filteredInvoices = invoices;
+    let filteredToes = toes;
 
-    const role = loggedInUser.user_role;
-    const department = loggedInUser.department;
-    const email = loggedInUser.email;
-
-    let filteredUsers = allUsers;
-    let filteredProjects = projects; // projects are already pre-filtered
-    let filteredClients = clients;
-    let filteredTimeEntries = timeEntries; // This `timeEntries` state is already date-filtered from the useEffect
-    let filteredToes = toes; // toes are already pre-filtered
-
-    if (viewLevel === 'staff') {
-      // Staff sees their own data
-      filteredTimeEntries = filteredTimeEntries.filter(te => te.user_email === email);
-      filteredProjects = filteredProjects.filter(p => p.project_manager === email);
-      filteredUsers = allUsers.filter(u => u.email === email);
-      filteredToes = filteredToes.filter(t => t.created_by === email);
-    } else if (viewLevel === 'manager') {
-      // Manager sees their department's data
-      const deptUsers = allUsers.filter(u => u.department === department);
-      const deptEmails = deptUsers.map(u => u.email);
-      
-      filteredUsers = deptUsers;
-      filteredTimeEntries = filteredTimeEntries.filter(te => deptEmails.includes(te.user_email));
-      filteredProjects = filteredProjects.filter(p => 
-        p.lead_department === department || deptEmails.includes(p.project_manager)
+    // Filter by department
+    if (selectedDepartment !== 'all') {
+      filteredTimeEntries = filteredTimeEntries.filter(entry => 
+        entry.department === selectedDepartment
       );
-      // Show clients where PM is in department OR client is unassigned
-      filteredClients = clients.filter(c => deptEmails.includes(c.lead_pm) || c.lead_pm === null);
-      // Show TOEs where creator is in department OR TOE is unassigned
-      filteredToes = filteredToes.filter(t => deptEmails.includes(t.created_by) || t.created_by === null);
-    } else if (viewLevel === 'director') {
-      // Director sees everything (already pre-filtered for active items)
-      filteredUsers = allUsers;
-      filteredProjects = projects;
-      filteredClients = clients;
-      filteredTimeEntries = timeEntries;
-      filteredToes = toes;
+      filteredProjects = filteredProjects.filter(project => 
+        project.lead_department === selectedDepartment
+      );
+    }
+
+    // Filter by user
+    if (selectedUser !== 'all') {
+      filteredTimeEntries = filteredTimeEntries.filter(entry => 
+        entry.user_email === selectedUser
+      );
     }
 
     return {
-      users: filteredUsers,
-      projects: filteredProjects,
-      clients: filteredClients,
       timeEntries: filteredTimeEntries,
+      projects: filteredProjects,
+      invoices: filteredInvoices,
       toes: filteredToes
     };
-  }, [loggedInUser, allUsers, projects, clients, timeEntries, toes, viewLevel]);
+  }, [timeEntries, projects, invoices, toes, selectedDepartment, selectedUser]);
 
-  // Check if user can access a specific view level
-  const canAccessLevel = (level) => {
-    if (!loggedInUser) return false;
-    const role = loggedInUser.user_role;
-    
-    if (level === 'staff') return true;
-    if (level === 'manager') return ['Manager', 'DeptLead', 'Director', 'Admin'].includes(role);
-    if (level === 'director') return ['Director', 'Admin'].includes(role);
-    
-    return false;
-  };
+  // Get unique departments for filter
+  const departments = useMemo(() => {
+    const deptSet = new Set();
+    timeEntries.forEach(entry => {
+      if (entry.department) deptSet.add(entry.department);
+    });
+    projects.forEach(project => {
+      if (project.lead_department) deptSet.add(project.lead_department);
+    });
+    return Array.from(deptSet).sort();
+  }, [timeEntries, projects]);
 
-  // Check if widget is enabled for current user role
-  const isWidgetEnabled = (widgetKey) => {
-    if (!dashboardSettings) return true; // Default to enabled if no settings are loaded
-    
-    const roleSettings = dashboardSettings.widget_permissions?.[loggedInUser?.user_role];
-    if (!roleSettings) return true; // Default to enabled if no specific role settings are found
-    
-    return roleSettings[widgetKey] !== false; // Widget is enabled unless explicitly set to false
-  };
+  // Get unique users for filter
+  const users = useMemo(() => {
+    const userSet = new Set();
+    timeEntries.forEach(entry => {
+      if (entry.user_email) userSet.add(entry.user_email);
+    });
+    return Array.from(userSet).sort();
+  }, [timeEntries]);
 
-  // Display loading spinner while data is being fetched (initial load or date range change)
-  if (isLoading && !loggedInUser) { // Only show full page loader on very first load
+  if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      <div className="p-6 min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-300 rounded w-1/4 mb-6"></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-64 bg-gray-300 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="p-6 min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Access Denied</h1>
+          <p className="text-gray-600">You need to be logged in to view the dashboard.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 min-h-screen bg-gray-50">
-      <style jsx>{`
-        .dashboard-grid {
-          display: grid;
-          grid-template-columns: repeat(12, 1fr);
-          gap: 24px;
-        }
-        .director-card {
-          background: #F9FAFB;
-          border: 1px solid #F3F4F6;
-        }
-        .section-header {
-          border-bottom: 1px solid #E5E7EB;
-          padding-bottom: 12px;
-          margin-bottom: 24px;
-        }
-      `}</style>
-      
-      <div className="max-w-screen-2xl mx-auto">
+    <div className="p-6 min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900">Dashboard</h1>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Date Range Picker */}
-            <DatePickerWithRange
-              date={dateRange}
-              setDate={setDateRange}
-            />
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+          <p className="text-gray-600">Welcome back, {currentUser.full_name || currentUser.email}!</p>
+        </div>
+
+        {/* Filters */}
+        <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <Label htmlFor="date-range">Date Range</Label>
+              <DatePickerWithRange
+                value={dateRange}
+                onChange={setDateRange}
+                placeholder="Select date range"
+              />
+            </div>
             
-            {/* View Level Toggle */}
-            {(canAccessLevel('manager') || canAccessLevel('director')) && (
-              <div>
-                <Select value={viewLevel} onValueChange={setViewLevel}>
-                  <SelectTrigger className="w-40 bg-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="staff">Staff View</SelectItem>
-                    {canAccessLevel('manager') && (
-                      <SelectItem value="manager">Manager View</SelectItem>
-                    )}
-                    {canAccessLevel('director') && (
-                      <SelectItem value="director">Director View</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            <div>
+              <Label htmlFor="department">Department</Label>
+              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Departments</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="user">User</Label>
+              <Select value={selectedUser} onValueChange={setSelectedUser}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All Users" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Users</SelectItem>
+                  {users.map(user => (
+                    <SelectItem key={user} value={user}>{user}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-end">
+              <Button 
+                onClick={() => {
+                  setDateRange(null);
+                  setSelectedDepartment('all');
+                  setSelectedUser('all');
+                }}
+                variant="outline"
+                className="w-full"
+              >
+                Clear Filters
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* TIME LAYER */}
-        <div className="section-header">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Time
-          </h2>
-        </div>
-        <div className="dashboard-grid mb-8">
-            {/* TL-1: Weekly Timesheet Hours */}
-            {isWidgetEnabled('weeklyTimesheetHours') && (
-              <div className="col-span-12 md:col-span-4">
-                <WeeklyTimesheetHours 
-                  timeEntries={contextualData.timeEntries}
-                  currentUser={loggedInUser}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-            
-            {/* TL-2: Yearly Billable Tracker */}
-            {isWidgetEnabled('yearlyBillableTracker') && (
-              <div className="col-span-12 md:col-span-4">
-                <YearlyBillableTracker 
-                  timeEntries={contextualData.timeEntries}
-                  currentUser={loggedInUser}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-            
-            {/* TL-3: Workload */}
-            {isWidgetEnabled('workload') && (
-              <div className={`col-span-12 md:col-span-4 ${viewLevel === 'director' ? 'director-card' : ''}`}>
-                <WorkloadWidget 
-                  users={contextualData.users}
-                  projects={contextualData.projects}
-                  timeEntries={contextualData.timeEntries}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-          </div>
-
-        {/* LEADS */}
-        <div className="section-header">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Leads
-          </h2>
-        </div>
-        <div className="dashboard-grid mb-8">
-            {/* LL-1: CRM Board */}
-            {isWidgetEnabled('crmBoard') && (
-              <div className="col-span-12 md:col-span-4">
-                <CRMBoard 
-                  clients={contextualData.clients}
-                  projects={contextualData.projects}
-                  users={contextualData.users}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                  allUsers={allUsers}
-                  setClients={setClients}
-                />
-              </div>
-            )}
-            
-            {/* LL-2: TOE Board */}
-            {isWidgetEnabled('toeBoard') && (
-              <div className="col-span-12 md:col-span-4">
-                <TOEBoard 
-                  toes={contextualData.toes}
-                  users={contextualData.users}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                  allUsers={allUsers}
-                  setTOEs={setTOEs}
-                />
-              </div>
-            )}
-            
-            {/* LL-3: SLA Tracker */}
-            {isWidgetEnabled('slaTracker') && (
-              <div className={`col-span-12 md:col-span-4 ${viewLevel === 'director' ? 'director-card' : ''}`}>
-                <SLATracker 
-                  clients={contextualData.clients}
-                  toes={contextualData.toes}
-                  users={contextualData.users}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
-          </div>
-
-        {/* PROJECTS LAYER */}
-        <div className="section-header">
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-            Projects Layer
-          </h2>
-        </div>
-        <div className="dashboard-grid mb-8">
-            {/* PL-1: Project Portfolio */}
-            {isWidgetEnabled('projectPortfolio') && (
-              <div className="col-span-12 md:col-span-4">
-                <ProjectPortfolio 
-                  projects={contextualData.projects}
-                  timeEntries={contextualData.timeEntries}
-                  users={contextualData.users}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                  allUsers={allUsers}
-                  setProjects={setProjects}
-                />
-              </div>
-            )}
-            
-            {/* PL-2: Upcoming Projects */}
-            {isWidgetEnabled('upcomingProjects') && (
-              <div className="col-span-12 md:col-span-4">
-                <UpcomingProjects 
-                  projects={contextualData.projects}
-                  users={contextualData.users}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  isLoading={isLoading}
-                  allUsers={allUsers}
-                  setProjects={setProjects}
-                />
-              </div>
-            )}
-            
-            {/* PL-3: Budget - Only for Manager+ */}
-            {(viewLevel === 'manager' || viewLevel === 'director') && isWidgetEnabled('budget') && (
-              <div className={`col-span-12 md:col-span-4 ${viewLevel === 'director' ? 'director-card' : ''}`}>
-                <BudgetWidget 
-                  timeEntries={contextualData.timeEntries}
-                  viewLevel={viewLevel}
-                  currentUser={loggedInUser}
-                  departments={allDepartments}
-                  analyticsSettings={analyticsSettings}
-                  isLoading={isLoading}
-                />
-              </div>
-            )}
+        {/* Widgets Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <WeeklyTimesheetHours 
+            isLoading={isLoading} 
+            currentUser={currentUser} 
+          />
+          <YearlyBillableTracker 
+            timeEntries={filteredData.timeEntries}
+            currentUser={currentUser}
+          />
+          <WorkloadWidget 
+            timeEntries={filteredData.timeEntries}
+            projects={filteredData.projects}
+            currentUser={currentUser}
+          />
+          <CRMBoard 
+            clients={clients}
+            currentUser={currentUser}
+          />
+          <TOEBoard 
+            toes={filteredData.toes}
+            currentUser={currentUser}
+          />
+          <SLATracker 
+            projects={filteredData.projects}
+            currentUser={currentUser}
+          />
+          <ProjectPortfolio 
+            projects={filteredData.projects}
+            currentUser={currentUser}
+          />
+          <UpcomingProjects 
+            projects={filteredData.projects}
+            currentUser={currentUser}
+          />
+          <BudgetWidget 
+            projects={filteredData.projects}
+            timeEntries={filteredData.timeEntries}
+            currentUser={currentUser}
+          />
         </div>
       </div>
     </div>

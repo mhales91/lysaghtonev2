@@ -380,7 +380,7 @@ export class CustomEntity {
  */
 export class UserEntity extends CustomEntity {
   constructor() {
-    super("users", false); // Use anon client for user operations to maintain user context
+    super("users", true); // Fixed: use service role client to bypass RLS
   }
 
   /**
@@ -441,7 +441,7 @@ export class UserEntity extends CustomEntity {
 
       // Use regular supabase client for database operations to maintain RLS context
       console.log("User.me() - Querying users table for user ID:", user.id);
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await supabase
         .from("users")
         .select("*")
         .eq("id", user.id)
@@ -473,7 +473,7 @@ export class UserEntity extends CustomEntity {
           approval_status: user.email === "dev@localhost.com" ? "approved" : "pending",
         };
 
-        const { data: createdUser, error: createError } = await supabaseAdmin
+        const { data: createdUser, error: createError } = await supabase
           .from("users")
           .insert(newUser)
           .select()
@@ -488,7 +488,7 @@ export class UserEntity extends CustomEntity {
 
       // Ensure dev user is always an admin
       if (user.email === "dev@localhost.com" && data.user_role !== "Admin") {
-        const { data: updatedUser, error: updateError } = await supabaseAdmin
+        const { data: updatedUser, error: updateError } = await supabase
           .from("users")
           .update({ user_role: "Admin", approval_status: "approved" })
           .eq("id", user.id)
@@ -536,7 +536,7 @@ export class UserEntity extends CustomEntity {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from("users")
       .update({ ...userData, updated_at: new Date().toISOString() })
       .eq("id", user.id)
@@ -782,24 +782,6 @@ function shouldUseServiceRole(entityName) {
     "audit",
     "log",
     "prompt",
-    // Add missing entities that are causing 400 errors
-    "analytics",
-    "time",
-    "ai",
-    "chat",
-    "dashboard",
-    "billing",
-    "company",
-    "lead",
-    "timer",
-    "weekly",
-    "staff",
-    "cost",
-    "import",
-    "job",
-    "crosswalk",
-    "write",
-    "tag"
   ];
 
   return serviceRoleEntities.some((pattern) =>
@@ -1025,26 +1007,5 @@ export function createCustomClient() {
   };
 }
 
-// Export the default client instance with lazy initialization
-let _customClient = null;
-
-export const customClient = new Proxy({}, {
-  get(target, prop) {
-    if (!_customClient) {
-      _customClient = createCustomClient();
-    }
-    return _customClient[prop];
-  },
-  has(target, prop) {
-    if (!_customClient) {
-      _customClient = createCustomClient();
-    }
-    return prop in _customClient;
-  },
-  ownKeys(target) {
-    if (!_customClient) {
-      _customClient = createCustomClient();
-    }
-    return Object.keys(_customClient);
-  }
-});
+// Export the default client instance
+export const customClient = createCustomClient();

@@ -12,15 +12,11 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
   const [timeEntries, setTimeEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // No longer need to load user - it's passed as prop
-
-  // Load time entries for the display week
-  useEffect(() => {
+  const loadTimeEntries = async () => {
     if (!currentUser) return;
-
-    const loadTimeEntries = async () => {
-      setIsLoading(true);
-      try {
+    
+    setIsLoading(true);
+    try {
         const weekStart = startOfWeek(displayWeek, { weekStartsOn: 1 });
         const weekEnd = addDays(weekStart, 6);
         
@@ -29,7 +25,7 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
 
         // Use TimeEntry entity with service role client to bypass RLS
         const entries = await TimeEntry.filter({
-          user_id: currentUser.id,
+          user_email: currentUser.email,  // Fixed: use user_email, not user_id
           date: {
             $gte: weekStartStr,
             $lte: weekEndStr
@@ -47,61 +43,54 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
       } finally {
         setIsLoading(false);
       }
-    };
+  };
 
+  useEffect(() => {
     loadTimeEntries();
-  }, [currentUser, displayWeek]);
+  }, [displayWeek, currentUser]);
 
   const chartData = useMemo(() => {
-    if (!timeEntries || isLoading) return [];
+    if (!timeEntries.length) return [];
 
     const weekStart = startOfWeek(displayWeek, { weekStartsOn: 1 });
-    const weekDays = eachDayOfInterval({
-      start: weekStart,
-      end: addDays(weekStart, 4) // Mon-Fri
-    });
-
-    const relevantTimeEntries = timeEntries.filter(entry => {
-      const entryDate = new Date(entry.date);
-      return entryDate >= weekStart && entryDate <= addDays(weekStart, 6);
-    });
+    const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
     return weekDays.map(day => {
-      const dayEntries = relevantTimeEntries.filter(entry => {
-        const entryDate = new Date(entry.date);
-        return isSameDay(entryDate, day);
-      });
-
-      const billableHours = dayEntries
-        .filter(e => e.billable)
-        .reduce((sum, e) => sum + ((e.minutes || 0) / 60), 0);
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const dayEntries = timeEntries.filter(entry => entry.date === dayStr);
       
-      const nonBillableHours = dayEntries
-        .filter(e => !e.billable)
-        .reduce((sum, e) => sum + ((e.minutes || 0) / 60), 0);
-
-      const totalHours = billableHours + nonBillableHours;
+      const totalHours = dayEntries.reduce((sum, entry) => {
+        return sum + (entry.hours || 0);
+      }, 0);
 
       return {
         day: format(day, 'EEE'),
-        billable: Math.round(billableHours * 10) / 10,
-        nonBillable: Math.round(nonBillableHours * 10) / 10,
-        total: Math.round(totalHours * 10) / 10
+        date: format(day, 'MMM d'),
+        hours: totalHours,
+        fullDate: dayStr
       };
     });
-  }, [timeEntries, isLoading, displayWeek]);
+  }, [timeEntries, displayWeek]);
 
-  const weeklyBillablePercentage = useMemo(() => {
-    const totalBillable = chartData.reduce((sum, day) => sum + day.billable, 0);
-    const totalHours = chartData.reduce((sum, day) => sum + day.total, 0);
-    return totalHours > 0 ? Math.round((totalBillable / totalHours) * 100) : 0;
-  }, [chartData]);
+  const totalWeekHours = chartData.reduce((sum, day) => sum + day.hours, 0);
 
-  if (dashboardLoading || isLoading) {
+  const goToPreviousWeek = () => {
+    setDisplayWeek(prev => subWeeks(prev, 1));
+  };
+
+  const goToNextWeek = () => {
+    setDisplayWeek(prev => addWeeks(prev, 1));
+  };
+
+  const goToCurrentWeek = () => {
+    setDisplayWeek(new Date());
+  };
+
+  if (isLoading || dashboardLoading) {
     return (
-      <Card className="h-full rounded-xl shadow-sm border-slate-200">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-base font-medium">Weekly Timesheet Hours</CardTitle>
+          <CardTitle>Weekly Timesheet Hours</CardTitle>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-[300px] w-full" />
@@ -109,57 +98,92 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
       </Card>
     );
   }
-  
-  const weekStartFormatted = format(startOfWeek(displayWeek, { weekStartsOn: 1 }), 'd MMM');
-  const weekEndFormatted = format(addDays(startOfWeek(displayWeek, { weekStartsOn: 1 }), 4), 'd MMM yyyy');
 
   return (
-    <Card className="h-full rounded-xl shadow-sm border-slate-200">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div>
-          <CardTitle className="text-base font-medium">Weekly Timesheet Hours</CardTitle>
-          <p className="text-xs text-gray-500">{weekStartFormatted} - {weekEndFormatted}</p>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle>Weekly Timesheet Hours</CardTitle>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPreviousWeek}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToCurrentWeek}
+            >
+              Today
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextWeek}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDisplayWeek(subWeeks(displayWeek, 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDisplayWeek(addWeeks(displayWeek, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="text-sm text-gray-600">
+          Week of {format(startOfWeek(displayWeek, { weekStartsOn: 1 }), 'MMM d, yyyy')} - {format(addDays(startOfWeek(displayWeek, { weekStartsOn: 1 }), 6), 'MMM d, yyyy')}
+        </div>
+        <div className="text-lg font-semibold text-green-600">
+          Total: {totalWeekHours.toFixed(1)} hours
         </div>
       </CardHeader>
       <CardContent>
-        <div className="h-[240px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
-              <Tooltip 
-                cursor={{ fill: 'rgba(243, 244, 246, 0.5)' }}
-                contentStyle={{ 
-                  background: 'white', 
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '0.5rem',
-                  boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'
-                }}
-                formatter={(value, name) => [
-                  `${value}h`, 
-                  name === 'billable' ? 'Billable' : 'Non-billable'
-                ]}
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="day" 
+                tick={{ fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
               />
-              <Bar dataKey="billable" stackId="hours" fill="#16a34a" name="billable" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="nonBillable" stackId="hours" fill="#ef4444" name="nonBillable" radius={[4, 4, 0, 0]} />
+              <YAxis 
+                tick={{ fontSize: 12 }}
+                axisLine={false}
+                tickLine={false}
+                domain={[0, 'dataMax + 1']}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload;
+                    return (
+                      <div className="bg-white p-3 border rounded-lg shadow-lg">
+                        <p className="font-medium">{data.date}</p>
+                        <p className="text-sm text-gray-600">
+                          Hours: <span className="font-semibold text-blue-600">{data.hours.toFixed(1)}</span>
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Bar 
+                dataKey="hours" 
+                fill="#3b82f6"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={40}
+              />
             </BarChart>
           </ResponsiveContainer>
-        </div>
-        
-        <div className="mt-4 text-center border-t pt-4">
-          <div className="text-3xl font-bold text-gray-800">
-            {weeklyBillablePercentage}%
+        ) : (
+          <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className="text-center">
+              <p className="text-lg font-medium">No time entries found</p>
+              <p className="text-sm">for this week</p>
+            </div>
           </div>
-          <div className="text-sm text-gray-500">Billable This Week</div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
