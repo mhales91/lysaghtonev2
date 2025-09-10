@@ -10,7 +10,6 @@ import {
   DashboardSettings,
   AnalyticsSetting
 } from "@/api/entities";
-import { supabase } from '@/lib/supabase-client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -115,18 +114,19 @@ export default function Dashboard() {
           const fromDateStr = from.toISOString().split('T')[0];
           const toDateStr = to.toISOString().split('T')[0];
           
-          // Use direct Supabase client for time entries filtering due to range operator issues
-          const { data: timeEntriesData, error: timeEntriesError } = await supabase
-            .from('time_entries')
-            .select('*')
-            .gte('start_time', fromDateStr)
-            .lte('start_time', toDateStr);
+          // Use TimeEntry entity with service role client to bypass RLS
+          const timeEntriesData = await TimeEntry.filter({
+            start_time: {
+              $gte: fromDateStr,
+              $lte: toDateStr
+            }
+          });
           
-          if (timeEntriesError) {
-            console.error('Error loading time entries:', timeEntriesError);
+          if (!timeEntriesData) {
+            console.error('Error loading time entries');
             setTimeEntries([]);
           } else {
-            setTimeEntries(timeEntriesData || []);
+            setTimeEntries(timeEntriesData);
           }
         } else {
           setTimeEntries([]); // Clear time entries if date range is incomplete

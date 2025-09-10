@@ -6,7 +6,6 @@ import { format, startOfWeek, eachDayOfInterval, addDays, isSameDay, subWeeks, a
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { TimeEntry, User } from '@/api/entities';
-import { supabase } from '@/lib/supabase-client';
 
 export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, currentUser }) {
   const [displayWeek, setDisplayWeek] = useState(new Date());
@@ -28,19 +27,20 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
         const weekStartStr = format(weekStart, 'yyyy-MM-dd');
         const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
 
-        // Use direct Supabase client for time entries filtering due to range operator issues
-        const { data: entries, error: entriesError } = await supabase
-          .from('time_entry')
-          .select('*')
-          .eq('user_id', currentUser.id)
-          .gte('date', weekStartStr)
-          .lte('date', weekEndStr);
+        // Use TimeEntry entity with service role client to bypass RLS
+        const entries = await TimeEntry.filter({
+          user_id: currentUser.id,
+          date: {
+            $gte: weekStartStr,
+            $lte: weekEndStr
+          }
+        });
         
-        if (entriesError) {
-          console.error('Error loading time entries:', entriesError);
+        if (!entries) {
+          console.error('Error loading time entries');
           setTimeEntries([]);
         } else {
-          setTimeEntries(entries || []);
+          setTimeEntries(entries);
         }
       } catch (error) {
         console.error('Error loading time entries for week:', error);

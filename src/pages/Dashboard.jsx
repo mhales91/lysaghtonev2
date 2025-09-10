@@ -16,7 +16,6 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { DatePickerWithRange } from "@/components/ui/date-range-picker";
 import { startOfMonth, endOfMonth } from 'date-fns'; // Import date-fns utilities
-import { supabase } from '@/lib/supabase-client';
 
 // Import all widgets
 import WeeklyTimesheetHours from "../components/dashboard/widgets/WeeklyTimesheetHours";

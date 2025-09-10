@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { TimeEntry, Project, Task, User, Client } from "@/api/entities";
-import { supabase } from '@/lib/supabase-client';
 import { Button } from "@/components/ui/button";
 import { Save, ChevronsUpDown } from "lucide-react";
 import { format, startOfWeek, endOfWeek } from 'date-fns';
