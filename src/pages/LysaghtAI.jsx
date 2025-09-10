@@ -5,9 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AIAssistant, ChatConversation, User } from '@/api/entities';
 import { useUser } from '@/contexts/UserContext';
-import { openaiAdvanced, openaiChat } from '@/api/functions';
-import { chatWithRetrieval } from '@/api/functions/chatWithRetrieval';
-import { chatStandard } from '@/api/functions/chatStandard';
+// Remove problematic imports that cause 'rt' error on Vercel
 import { 
   openaiAdvanced as realOpenaiAdvanced, 
   openaiChat as realOpenaiChat, 
@@ -647,7 +645,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
             })
           });
         } else {
-          apiResponse = await openaiAdvanced({
+          apiResponse = await realOpenaiAdvanced({
             prompt: userMessage.content,
             model: effectiveModel,
             action: 'deep_research',
@@ -694,7 +692,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await chatWithRetrieval({
+            apiResponse = await realChatWithRetrieval({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: {
@@ -705,7 +703,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await chatStandard({
+            apiResponse = await realChatStandard({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: safeAssistant,
@@ -915,7 +913,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           console.log('apiResponse from realOpenaiAdvanced:', apiResponse);
           console.log('Model used in deep research API response:', apiResponse?.model_used);
         } else {
-          apiResponse = await openaiAdvanced({
+          apiResponse = await realOpenaiAdvanced({
             prompt: userMessage.content,
             model: effectiveModel,
             action: actionType,
@@ -961,7 +959,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await chatWithRetrieval({
+            apiResponse = await realChatWithRetrieval({
               message: userMessage.content,
               history: messages,
               assistantConfig: {
@@ -972,7 +970,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await chatStandard({
+            apiResponse = await realChatStandard({
               message: userMessage.content,
               history: messages,
               assistantConfig: safeAssistant,
