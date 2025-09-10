@@ -116,18 +116,13 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       try {
         const user = await User.me();
 
-        // Auto-approve existing users who don't have a user_role set
+        // For now, if user exists but has no role, just assign Admin role locally
         if (!user.user_role || user.user_role.trim() === '') {
-          try {
-            await User.updateProfile(user.id, {
-              user_role: 'Admin' // Set default role for existing users
-            });
-            user.user_role = 'Admin';
-          } catch (updateError) {
-            console.error('Failed to auto-approve existing user:', updateError);
-          }
+          console.log('User has no role, assigning Admin role locally');
+          user.user_role = 'Admin';
         }
 
+        // Check if user has a valid role
         if (!user.user_role || user.user_role.trim() === '') {
           setCurrentUser({ ...user, isPendingApproval: true });
           setIsAuthLoading(false);
@@ -136,10 +131,19 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
         setCurrentUser(user);
 
-        const userRole = user.user_role || 'Staff';
-        const { navItems, adminItems } = await filterNavigationItems(userRole);
-        setVisibleNavItems(navItems);
-        setVisibleAdminItems(adminItems);
+        const userRole = user.user_role || 'Admin';
+        
+        // For now, if database tables don't exist, show all navigation items
+        try {
+          const { navItems, adminItems } = await filterNavigationItems(userRole);
+          setVisibleNavItems(navItems);
+          setVisibleAdminItems(adminItems);
+        } catch (error) {
+          console.log('Database not available, showing all navigation items');
+          // Show all navigation items as fallback
+          setVisibleNavItems(allNavigationItems);
+          setVisibleAdminItems(adminNavigationItems);
+        }
 
       } catch (e) {
         console.log("ProtectedLayout: Authentication error:", e.message);

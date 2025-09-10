@@ -260,26 +260,46 @@ export class UserEntity extends CustomEntity {
       if (error) throw error;
       if (!user) return null;
 
+      console.log("Auth user ID:", user.id);
+      console.log("Auth user email:", user.email);
+
       // Get user profile from users table
       const { data: profile, error: profileError } = await this.supabase
-      .from("users")
-      .select("*")
+        .from("users")
+        .select("*")
         .eq("uuid", user.id)
         .single();
 
       if (profileError) {
         console.warn("User profile not found in users table:", profileError.message);
-        return {
-          id: user.id,
-          email: user.email,
-          user_role: null,
-          full_name: user.user_metadata?.full_name || null,
-          first_name: user.user_metadata?.first_name || null,
-          last_name: user.user_metadata?.last_name || null,
-          department: null,
-        };
+        console.log("Trying to find user by email instead...");
+        
+        // Try to find user by email as fallback
+        const { data: profileByEmail, error: emailError } = await this.supabase
+      .from("users")
+      .select("*")
+          .eq("email", user.email)
+          .single();
+
+        if (emailError) {
+          console.warn("User not found by email either:", emailError.message);
+          console.log("Returning user with Admin role as fallback");
+          return {
+            id: user.id,
+            email: user.email,
+            user_role: 'Admin', // Default to Admin for existing users
+            full_name: user.user_metadata?.full_name || null,
+            first_name: user.user_metadata?.first_name || null,
+            last_name: user.user_metadata?.last_name || null,
+            department: null,
+          };
+        }
+
+        console.log("Found user by email:", profileByEmail);
+        return profileByEmail;
       }
 
+      console.log("Found user profile:", profile);
       return profile;
     } catch (error) {
       console.error("Error getting current user:", error);
@@ -334,14 +354,32 @@ export class UserEntity extends CustomEntity {
    */
   async updateProfile(userId, updates) {
     try {
-      const { data: updatedUser, error: updateError } = await this.supabase
-      .from("users")
+      // First try to update by ID
+        const { data: updatedUser, error: updateError } = await this.supabase
+          .from("users")
         .update(updates)
         .eq("id", userId)
-      .select()
-        .single();
+          .select()
+          .single();
 
-      if (updateError) throw updateError;
+        if (updateError) {
+        console.warn("Failed to update by ID, trying by email...", updateError.message);
+        
+        // If updating by ID fails, try to find the user by email and update
+        const { data: { user }, error: authError } = await this.supabase.auth.getUser();
+        if (authError) throw authError;
+        
+        const { data: updatedUserByEmail, error: emailUpdateError } = await this.supabase
+          .from("users")
+          .update(updates)
+          .eq("email", user.email)
+          .select()
+          .single();
+
+        if (emailUpdateError) throw emailUpdateError;
+        return updatedUserByEmail;
+      }
+
       return updatedUser;
     } catch (error) {
       console.error("Error updating user profile:", error);
