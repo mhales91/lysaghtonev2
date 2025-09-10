@@ -99,7 +99,9 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   useEffect(() => {
     const loadPermissions = async () => {
       try {
+        console.log('Loading permissions from database...');
         await loadAllRolePermissions();
+        console.log('Permissions loaded successfully');
         setPermissionsLoaded(true);
       } catch (error) {
         console.error('Failed to load permissions from database:', error);
@@ -111,10 +113,18 @@ const ProtectedLayout = ({ children, currentPageName }) => {
     loadPermissions();
   }, []);
 
+  // Load user data and set up navigation
   useEffect(() => {
-    const fetchUser = async () => {
+    const loadUserAndNavigation = async () => {
+      if (!permissionsLoaded) {
+        console.log('Waiting for permissions to load...');
+        return;
+      }
+      
       try {
+        console.log('Loading user data from database...');
         const user = await User.me();
+        console.log('Loaded user from database:', user);
 
         // Auto-approve existing users who don't have an approval_status set
         if (!user.approval_status || user.approval_status === null || user.approval_status === undefined) {
@@ -125,12 +135,14 @@ const ProtectedLayout = ({ children, currentPageName }) => {
               approved_date: new Date().toISOString()
             });
             user.approval_status = 'approved';
+            console.log('Auto-approved user');
           } catch (updateError) {
             console.error('Failed to auto-approve existing user:', updateError);
           }
         }
 
         if (user.approval_status !== 'approved') {
+          console.log('User not approved, showing pending screen');
           setCurrentUser({ ...user, isPendingApproval: true });
           setIsAuthLoading(false);
           return;
@@ -139,7 +151,14 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setCurrentUser(user);
 
         const userRole = user.user_role || 'Staff';
+        console.log('Using user role for navigation:', userRole);
+        
         const { navItems, adminItems } = filterNavigationItems(userRole);
+        console.log('Filtered navigation items:', { 
+          navItems: navItems.map(item => item.title), 
+          adminItems: adminItems.map(item => item.title) 
+        });
+        
         setVisibleNavItems(navItems);
         setVisibleAdminItems(adminItems);
 
@@ -154,10 +173,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       }
     };
     
-    // Only fetch user after permissions are loaded
-    if (permissionsLoaded) {
-      fetchUser();
-    }
+    loadUserAndNavigation();
   }, [permissionsLoaded]);
 
   // Refresh navigation when permissions might have changed
