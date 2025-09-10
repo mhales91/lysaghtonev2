@@ -39,9 +39,41 @@ const UserManagement = () => {
 
     // Get current user
     const currentUser = User.current;
+    const [hasAccess, setHasAccess] = useState(null);
 
     // Check if user has permission to access User Management
-    if (!currentUser || !canAccessUserManagement(currentUser.user_role)) {
+    useEffect(() => {
+        const checkAccess = async () => {
+            if (!currentUser) {
+                setHasAccess(false);
+                return;
+            }
+            
+            try {
+                const access = await canAccessUserManagement(currentUser.user_role);
+                setHasAccess(access);
+            } catch (error) {
+                console.error('Error checking access:', error);
+                // Fallback: allow Admin and Director access
+                setHasAccess(currentUser.user_role === 'Admin' || currentUser.user_role === 'Director');
+            }
+        };
+        
+        checkAccess();
+    }, [currentUser]);
+
+    if (hasAccess === null) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-100">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Checking permissions...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!hasAccess) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-100">
                 <Card className="w-full max-w-md">

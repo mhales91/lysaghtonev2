@@ -56,7 +56,13 @@ export const hasPermission = async (userRole, pageName) => {
 
 // Check if current user can access User Management
 export const canAccessUserManagement = async (userRole) => {
-    return await hasPermission(userRole, 'User Management');
+    try {
+        return await hasPermission(userRole, 'User Management');
+    } catch (error) {
+        console.log('Database not available for permission check, using fallback');
+        // Fallback: Admin and Director roles can access User Management
+        return userRole === 'Admin' || userRole === 'Director';
+    }
 };
 
 // Get all pages a user can access
