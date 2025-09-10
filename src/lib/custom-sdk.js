@@ -410,8 +410,8 @@ function createEntitiesProxy() {
       // Convert entity name to table name (e.g., 'User' -> 'users')
       const tableName = entityName.toLowerCase() + 's';
       
-      // Return appropriate entity instance
-      const entity = entityName === 'User' ? new UserEntity() : new CustomEntity(tableName, useServiceRole);
+      // Return appropriate entity instance (default to regular client, not service role)
+      const entity = entityName === 'User' ? new UserEntity() : new CustomEntity(tableName, false);
       return entity;
     }
   });
