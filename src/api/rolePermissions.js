@@ -24,11 +24,88 @@ export const allDashboardWidgets = [
 // Available roles
 export const availableRoles = ['Admin', 'Director', 'Manager', 'Staff', 'Client'];
 
+// Cache for table existence check to prevent repeated API calls
+let tablesExistCache = null;
+let tablesExistCacheTime = 0;
+const CACHE_DURATION = 30000; // 30 seconds
+
+/**
+ * Check if the required tables exist (with caching)
+ */
+export const checkTablesExist = async () => {
+    // Return cached result if still valid
+    if (tablesExistCache !== null && Date.now() - tablesExistCacheTime < CACHE_DURATION) {
+        return tablesExistCache;
+    }
+
+    try {
+        // Try to query the roles table
+        const { error: rolesError } = await supabase
+            .from('roles')
+            .select('id')
+            .limit(1);
+        
+        if (rolesError) {
+            // Check if it's a table doesn't exist error
+            if (rolesError.message.includes('relation "public.roles" does not exist') || 
+                rolesError.message.includes('relation "roles" does not exist') ||
+                rolesError.code === 'PGRST116' ||
+                rolesError.message.includes('does not exist')) {
+                console.log('Roles table does not exist yet');
+                tablesExistCache = false;
+                tablesExistCacheTime = Date.now();
+                return false;
+            }
+            console.log('Roles table error:', rolesError.message);
+            tablesExistCache = false;
+            tablesExistCacheTime = Date.now();
+            return false;
+        }
+
+        // Try to query the permissions table
+        const { error: permissionsError } = await supabase
+            .from('permissions')
+            .select('id')
+            .limit(1);
+        
+        if (permissionsError) {
+            // Check if it's a table doesn't exist error
+            if (permissionsError.message.includes('relation "public.permissions" does not exist') || 
+                permissionsError.message.includes('relation "permissions" does not exist') ||
+                permissionsError.code === 'PGRST116' ||
+                permissionsError.message.includes('does not exist')) {
+                console.log('Permissions table does not exist yet');
+                tablesExistCache = false;
+                tablesExistCacheTime = Date.now();
+                return false;
+            }
+            console.log('Permissions table error:', permissionsError.message);
+            tablesExistCache = false;
+            tablesExistCacheTime = Date.now();
+            return false;
+        }
+
+        tablesExistCache = true;
+        tablesExistCacheTime = Date.now();
+        return true;
+    } catch (error) {
+        console.log('Error checking tables:', error);
+        tablesExistCache = false;
+        tablesExistCacheTime = Date.now();
+        return false;
+    }
+};
+
 /**
  * Get all roles from the database
  */
 export const getRoles = async () => {
     try {
+        const tablesExist = await checkTablesExist();
+        if (!tablesExist) {
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('roles')
             .select('*')
@@ -47,6 +124,11 @@ export const getRoles = async () => {
  */
 export const getPermissions = async () => {
     try {
+        const tablesExist = await checkTablesExist();
+        if (!tablesExist) {
+            return [];
+        }
+
         const { data, error } = await supabase
             .from('permissions')
             .select('*')
@@ -113,6 +195,11 @@ export const getRolePermissions = async (roleName) => {
  */
 export const saveRolePermissions = async (roleName, pageNames) => {
     try {
+        const tablesExist = await checkTablesExist();
+        if (!tablesExist) {
+            return { success: false, error: 'Database tables do not exist' };
+        }
+
         // First, get the role ID
         const { data: roleData, error: roleError } = await supabase
             .from('roles')
@@ -176,40 +263,6 @@ export const hasPermission = async (userRole, pageName) => {
         return permissions.includes(pageName);
     } catch (error) {
         console.error('Error checking permission:', error);
-        return false;
-    }
-};
-
-/**
- * Check if the required tables exist
- */
-export const checkTablesExist = async () => {
-    try {
-        // Try to query the roles table
-        const { error: rolesError } = await supabase
-            .from('roles')
-            .select('id')
-            .limit(1);
-        
-        if (rolesError) {
-            console.log('Roles table does not exist:', rolesError.message);
-            return false;
-        }
-
-        // Try to query the permissions table
-        const { error: permissionsError } = await supabase
-            .from('permissions')
-            .select('id')
-            .limit(1);
-        
-        if (permissionsError) {
-            console.log('Permissions table does not exist:', permissionsError.message);
-            return false;
-        }
-
-        return true;
-    } catch (error) {
-        console.log('Error checking tables:', error);
         return false;
     }
 };
