@@ -1,4 +1,5 @@
 import Layout from "./Layout.jsx";
+import Login from "./Login";
 
 import Dashboard from "./Dashboard";
 
@@ -122,10 +123,15 @@ function PagesContent() {
     const currentPage = _getCurrentPage(location.pathname);
     
     return (
-        <Layout currentPageName={currentPage}>
-            <Routes>            
-                
-                    <Route path="/" element={<Dashboard />} />
+        <Routes>            
+            {/* Public routes that don't require authentication */}
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected routes that require authentication */}
+            <Route path="/*" element={
+                <Layout currentPageName={currentPage}>
+                    <Routes>
+                        <Route path="/" element={<Dashboard />} />
                 
                 
                 <Route path="/Dashboard" element={<Dashboard />} />
@@ -175,9 +181,10 @@ function PagesContent() {
                 <Route path="/DashboardSettings" element={<DashboardSettings />} />
                 
                 <Route path="/Agent" element={<Agent />} />
-                
-            </Routes>
-        </Layout>
+                    </Routes>
+                </Layout>
+            } />
+        </Routes>
     );
 }
 

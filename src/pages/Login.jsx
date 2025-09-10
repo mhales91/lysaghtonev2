@@ -28,74 +28,25 @@ const Login = () => {
     setError('');
 
     try {
-      if (isLocalhost) {
-        // For localhost, check localStorage users first, then try Supabase for database users
-        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-        const approvedUsers = JSON.parse(localStorage.getItem('approvedUsers') || '[]');
-        
-        // Check if user exists in approved users (localhost)
-        console.log('Checking localStorage users:', { approvedUsers, email: email.trim() });
-        const localUser = approvedUsers.find(user => 
-          user.email === email.trim() && user.password === password
-        );
-        
-        console.log('Found local user:', localUser);
-        
-        if (localUser) {
-          // Set user in localStorage for session management
-          localStorage.setItem('currentUser', JSON.stringify(localUser));
-          window.location.href = '/dashboard';
-          return;
-        }
-        
-        // Check if user exists in pending users
-        const pendingUser = pendingUsers.find(user => user.email === email.trim());
-        if (pendingUser) {
-          setError('Your account is pending approval. Please wait for an administrator to approve your access.');
-          return;
-        }
-        
-        // If not found in localStorage, try Supabase authentication for database users (like dev@localhost.com)
-        console.log('No localhost user found, trying Supabase authentication...');
-        try {
-          const { data, error: signInError } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password: password,
-          });
+      // Always use Supabase authentication for both localhost and production
+      console.log('Attempting login with Supabase for:', email.trim());
+      
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password,
+      });
 
-          if (signInError) {
-            console.log('Supabase authentication failed:', signInError);
-            setError('Invalid login credentials. Please check your email and password.');
-            return;
-          }
+      if (signInError) {
+        console.log('Supabase authentication failed:', signInError);
+        setError('Invalid login credentials. Please check your email and password.');
+        return;
+      }
 
-          if (data.user) {
-            console.log('Supabase authentication successful:', data.user);
-            // For database users, we need to get their full user data
-            // This will be handled by the Layout component
-            window.location.href = '/dashboard';
-          }
-        } catch (supabaseError) {
-          console.log('Supabase authentication error:', supabaseError);
-          setError('Invalid login credentials. Please check your email and password.');
-          return;
-        }
-      } else {
-        // Production: Use Supabase authentication only
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password: password,
-        });
-
-        if (signInError) {
-          setError(signInError.message);
-          return;
-        }
-
-        if (data.user) {
-          // Redirect to dashboard after successful login
-          window.location.href = '/dashboard';
-        }
+      if (data.user) {
+        console.log('Supabase authentication successful:', data.user);
+        // Redirect to dashboard after successful login
+        // The Layout component will handle getting the full user data
+        window.location.href = '/dashboard';
       }
     } catch (err) {
       setError('Login failed. Please check your credentials and try again.');
@@ -123,77 +74,67 @@ const Login = () => {
     }
 
     try {
-      if (isLocalhost) {
-        // For localhost development, we'll create a mock user in localStorage
-        // and add them to a pending users list that admins can see
-        const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
-        
-        // Check if user already exists
-        const existingUser = pendingUsers.find(user => user.email === email.trim());
-        if (existingUser) {
-          setError('An account with this email is already pending approval.');
-          setIsLoading(false);
-          return;
-        }
-
-        // Create new pending user
-        const newPendingUser = {
-          id: Date.now().toString(), // Simple ID for localhost
-          email: email.trim(),
-          full_name: fullName.trim(),
-          password: password, // Store password for localhost authentication
-          user_role: 'Staff',
-          approval_status: 'pending',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        // Add to pending users list
-        pendingUsers.push(newPendingUser);
-        localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
-
-        setError('');
-        alert('Account created successfully! Please wait for an administrator to approve your access.');
-        setIsSignUp(false);
-        setFullName('');
-        setEmail('');
-        setPassword('');
-        setConfirmPassword('');
-      } else {
-        // Production: Use Supabase authentication and database
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email: email.trim(),
-          password: password,
-        });
-
-        if (signUpError) {
-          setError(signUpError.message);
-          return;
-        }
-
-        if (data.user) {
-          // Create user record in database
-          try {
-            await User.create({
-              email: email.trim(),
-              full_name: fullName.trim(),
-              user_role: 'Staff',
-              approval_status: 'pending',
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            });
-
-            setError('');
-            alert('Account created successfully! Please wait for an administrator to approve your access.');
-            setIsSignUp(false);
-            setFullName('');
-            setEmail('');
-            setPassword('');
-            setConfirmPassword('');
-          } catch (dbError) {
-            console.error('Database error:', dbError);
-            setError('Account created but there was an error saving your profile. Please contact support.');
+      // Always use Supabase authentication for both localhost and production
+      console.log('Creating account with Supabase for:', email.trim());
+      
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            user_role: 'Staff'
           }
+        }
+      });
+
+      if (signUpError) {
+        console.error('Signup error:', signUpError);
+        setError(signUpError.message);
+        return;
+      }
+
+      if (data.user) {
+        console.log('User created successfully:', data.user);
+        
+        // For localhost, also add to localStorage for easier testing
+        if (isLocalhost) {
+          const pendingUsers = JSON.parse(localStorage.getItem('pendingUsers') || '[]');
+          const newPendingUser = {
+            id: data.user.id,
+            email: email.trim(),
+            full_name: fullName.trim(),
+            user_role: 'Staff',
+            approval_status: 'pending',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          pendingUsers.push(newPendingUser);
+          localStorage.setItem('pendingUsers', JSON.stringify(pendingUsers));
+        }
+        
+        // Create user record in database
+        try {
+          await User.create({
+            id: data.user.id,
+            email: email.trim(),
+            full_name: fullName.trim(),
+            user_role: 'Staff',
+            approval_status: 'pending',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+          setError('');
+          alert('Account created successfully! Please wait for an administrator to approve your access.');
+          setIsSignUp(false);
+          setFullName('');
+          setEmail('');
+          setPassword('');
+          setConfirmPassword('');
+        } catch (dbError) {
+          console.error('Database error:', dbError);
+          setError('Account created but there was an error saving your profile. Please contact support.');
         }
       }
     } catch (err) {

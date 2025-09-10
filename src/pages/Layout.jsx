@@ -72,7 +72,6 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [visibleNavItems, setVisibleNavItems] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -108,8 +107,9 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       } catch (e) {
         console.log("ProtectedLayout: Authentication error:", e.message);
         console.log("Full error details:", e);
-        setAuthError(`Authentication error: ${e.message}`);
-        // Don't auto-login as dev user - let user handle authentication properly
+        // Redirect to login page instead of showing error
+        window.location.href = '/login';
+        return;
       } finally {
         setIsAuthLoading(false);
       }
@@ -123,38 +123,6 @@ const ProtectedLayout = ({ children, currentPageName }) => {
     return <PageLoadingSkeleton title="Authenticating..." />;
   }
 
-  if (authError) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <Card className="w-full max-w-md mx-auto">
-          <CardContent className="text-center p-8">
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Building2 className="w-8 h-8 text-red-600" />
-            </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Error</h2>
-            <p className="text-gray-600 mb-4">
-              Unable to authenticate your session. Please try logging in again.
-            </p>
-            <Button
-              onClick={async () => {
-                try {
-                  await User.login("dev");
-                  window.location.reload();
-                } catch (error) {
-                  console.error("Login failed:", error);
-                  setAuthError('Login failed. Please try again.');
-                }
-              }}
-              style={{ backgroundColor: '#5E0F68' }}
-              className="hover:bg-purple-700"
-            >
-              Sign In (Development)
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // Show pending approval screen
   if (currentUser?.isPendingApproval) {
@@ -283,7 +251,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
             </SidebarContent>
 
             <SidebarFooter className="border-t p-6" style={{ borderColor: 'var(--lysaght-border)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold"
                   style={{ backgroundColor: 'var(--lysaght-text-light)' }}
@@ -299,6 +267,28 @@ const ProtectedLayout = ({ children, currentPageName }) => {
                   </p>
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={async () => {
+                  try {
+                    await User.logout();
+                    // Clear any localStorage data
+                    localStorage.removeItem('currentUser');
+                    localStorage.removeItem('pendingUsers');
+                    localStorage.removeItem('approvedUsers');
+                    // Redirect to login
+                    window.location.href = '/login';
+                  } catch (error) {
+                    console.error('Logout error:', error);
+                    // Force redirect even if logout fails
+                    window.location.href = '/login';
+                  }
+                }}
+              >
+                Sign Out
+              </Button>
             </SidebarFooter>
           </Sidebar>
 
