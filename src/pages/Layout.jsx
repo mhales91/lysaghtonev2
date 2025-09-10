@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import GlobalSearch from "@/components/layout/GlobalSearch";
 import { UserProvider } from '@/contexts/UserContext';
+import { canAccessUserManagement, hasPermission } from '@/utils/permissions';
 import {
   LayoutDashboard,
   Users,
@@ -118,6 +119,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   }, []);
 
   const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';
+  const canAccessUserMgmt = currentUser ? canAccessUserManagement(currentUser.user_role) : false;
 
   if (isAuthLoading) {
     return <PageLoadingSkeleton title="Authenticating..." />;
@@ -221,14 +223,23 @@ const ProtectedLayout = ({ children, currentPageName }) => {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              {isAdmin && (
+              {(isAdmin || canAccessUserMgmt) && (
                 <SidebarGroup>
                   <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wider px-2 py-3" style={{ color: 'var(--lysaght-text-light)' }}>
                     Admin
                   </SidebarGroupLabel>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {adminNavigationItems.map((item) => (
+                      {adminNavigationItems
+                        .filter(item => {
+                          // Filter based on specific permissions
+                          if (item.title === 'User Management') {
+                            return canAccessUserMgmt;
+                          }
+                          // For other admin items, use the existing isAdmin check
+                          return isAdmin;
+                        })
+                        .map((item) => (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton
                             asChild
