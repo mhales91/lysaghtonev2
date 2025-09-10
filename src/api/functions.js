@@ -1,21 +1,56 @@
-import { base44 } from './base44Client';
+// Use dynamic imports to avoid bundling issues on Vercel
+let base44Client;
 
+const getBase44Client = async () => {
+  if (!base44Client) {
+    const { base44 } = await import('./base44Client');
+    base44Client = base44;
+  }
+  return base44Client;
+};
 
-export const xeroIntegration = base44.functions.xeroIntegration;
+export const xeroIntegration = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.xeroIntegration(...args);
+};
 
-export const openaiChat = base44.functions.openaiChat;
+export const openaiChat = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.openaiChat(...args);
+};
 
-export const openaiAdvanced = base44.functions.openaiAdvanced;
+export const openaiAdvanced = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.openaiAdvanced(...args);
+};
 
-export const timesheetManagement = base44.functions.timesheetManagement;
+export const timesheetManagement = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.timesheetManagement(...args);
+};
 
-export const generateTOEPDF = base44.functions.generateTOEPDF;
+export const generateTOEPDF = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.generateTOEPDF(...args);
+};
 
-export const generateSignedDocument = base44.functions.generateSignedDocument;
+export const generateSignedDocument = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.generateSignedDocument(...args);
+};
 
-export const openaiChat_g5 = base44.functions.openaiChat_g5;
+export const openaiChat_g5 = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.openaiChat_g5(...args);
+};
 
-export const jobsImport = base44.functions.jobsImport;
+export const jobsImport = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.jobsImport(...args);
+};
 
-export const importCleanedProjects = base44.functions.importCleanedProjects;
+export const importCleanedProjects = async (...args) => {
+  const client = await getBase44Client();
+  return client.functions.importCleanedProjects(...args);
+};
 
