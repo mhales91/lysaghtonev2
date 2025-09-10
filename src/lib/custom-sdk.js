@@ -380,7 +380,7 @@ export class CustomEntity {
  */
 export class UserEntity extends CustomEntity {
   constructor() {
-    super("users", false); // Use anon client for user operations to maintain user context
+    super("users", true); // Use service role client for admin operations (bypasses RLS)
   }
 
   /**

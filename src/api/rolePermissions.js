@@ -82,12 +82,14 @@ export const getRolePermission = async (role) => {
 // Update permissions for a specific role
 export const updateRolePermission = async (role, permissions) => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('role_permissions')
       .upsert({
         user_role: role,
         permissions: permissions,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_role'  // Add this to specify the conflict resolution column
       })
       .select()
       .single();
