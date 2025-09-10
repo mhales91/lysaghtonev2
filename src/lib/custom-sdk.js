@@ -782,6 +782,24 @@ function shouldUseServiceRole(entityName) {
     "audit",
     "log",
     "prompt",
+    // Add missing entities that are causing 400 errors
+    "analytics",
+    "time",
+    "ai",
+    "chat",
+    "dashboard",
+    "billing",
+    "company",
+    "lead",
+    "timer",
+    "weekly",
+    "staff",
+    "cost",
+    "import",
+    "job",
+    "crosswalk",
+    "write",
+    "tag"
   ];
 
   return serviceRoleEntities.some((pattern) =>
@@ -1007,5 +1025,26 @@ export function createCustomClient() {
   };
 }
 
-// Export the default client instance
-export const customClient = createCustomClient();
+// Export the default client instance with lazy initialization
+let _customClient = null;
+
+export const customClient = new Proxy({}, {
+  get(target, prop) {
+    if (!_customClient) {
+      _customClient = createCustomClient();
+    }
+    return _customClient[prop];
+  },
+  has(target, prop) {
+    if (!_customClient) {
+      _customClient = createCustomClient();
+    }
+    return prop in _customClient;
+  },
+  ownKeys(target) {
+    if (!_customClient) {
+      _customClient = createCustomClient();
+    }
+    return Object.keys(_customClient);
+  }
+});
