@@ -50,8 +50,6 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
   }, [displayWeek, currentUser]);
 
   const chartData = useMemo(() => {
-    if (!timeEntries.length) return [];
-
     const weekStart = startOfWeek(displayWeek, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) });
 
@@ -136,54 +134,45 @@ export default function WeeklyTimesheetHours({ isLoading: dashboardLoading, curr
         </div>
       </CardHeader>
       <CardContent>
-        {chartData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis 
-                dataKey="day" 
-                tick={{ fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis 
-                tick={{ fontSize: 12 }}
-                axisLine={false}
-                tickLine={false}
-                domain={[0, 'dataMax + 1']}
-              />
-              <Tooltip 
-                content={({ active, payload, label }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload;
-                    return (
-                      <div className="bg-white p-3 border rounded-lg shadow-lg">
-                        <p className="font-medium">{data.date}</p>
-                        <p className="text-sm text-gray-600">
-                          Hours: <span className="font-semibold text-blue-600">{data.hours.toFixed(1)}</span>
-                        </p>
-                      </div>
-                    );
-                  }
-                  return null;
-                }}
-              />
-              <Bar 
-                dataKey="hours" 
-                fill="#3b82f6"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={40}
-              />
-            </BarChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex items-center justify-center h-[300px] text-gray-500">
-            <div className="text-center">
-              <p className="text-lg font-medium">No time entries found</p>
-              <p className="text-sm">for this week</p>
-            </div>
-          </div>
-        )}
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="day" 
+              tick={{ fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis 
+              tick={{ fontSize: 12 }}
+              axisLine={false}
+              tickLine={false}
+              domain={[0, 'dataMax + 1']}
+            />
+            <Tooltip 
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="bg-white p-3 border rounded-lg shadow-lg">
+                      <p className="font-medium">{data.date}</p>
+                      <p className="text-sm text-gray-600">
+                        Hours: <span className="font-semibold text-blue-600">{data.hours.toFixed(1)}</span>
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Bar 
+              dataKey="hours" 
+              fill="#3b82f6"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={40}
+            />
+          </BarChart>
+        </ResponsiveContainer>
       </CardContent>
     </Card>
   );

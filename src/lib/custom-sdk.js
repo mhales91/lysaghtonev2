@@ -439,9 +439,9 @@ export class UserEntity extends CustomEntity {
 
       console.log("User.me() - Authenticated user found:", { id: user.id, email: user.email });
 
-      // Use regular supabase client for database operations to maintain RLS context
+      // Use service role client for database operations to bypass RLS
       console.log("User.me() - Querying users table for user ID:", user.id);
-      const { data, error } = await supabase
+      const { data, error } = await this.supabase  // Fixed: use this.supabase
         .from("users")
         .select("*")
         .eq("id", user.id)
@@ -473,7 +473,7 @@ export class UserEntity extends CustomEntity {
           approval_status: user.email === "dev@localhost.com" ? "approved" : "pending",
         };
 
-        const { data: createdUser, error: createError } = await supabase
+        const { data: createdUser, error: createError } = await this.supabase  // Fixed: use this.supabase
           .from("users")
           .insert(newUser)
           .select()
@@ -488,7 +488,7 @@ export class UserEntity extends CustomEntity {
 
       // Ensure dev user is always an admin
       if (user.email === "dev@localhost.com" && data.user_role !== "Admin") {
-        const { data: updatedUser, error: updateError } = await supabase
+        const { data: updatedUser, error: updateError } = await this.supabase  // Fixed: use this.supabase
           .from("users")
           .update({ user_role: "Admin", approval_status: "approved" })
           .eq("id", user.id)
@@ -782,6 +782,29 @@ function shouldUseServiceRole(entityName) {
     "audit",
     "log",
     "prompt",
+    "timeentry",        // Added: for time_entry table
+    "dashboardsettings", // Added: for dashboard_settings table
+    "analyticssetting",  // Added: for analytics_setting table
+    "aiassistant",      // Added: for ai_assistant table
+    "invoice",          // Added: for invoice table
+    "companysettings",  // Added: for company_settings table
+    "billingsettings",  // Added: for billing_settings table
+    "staffrate",        // Added: for staff_rate table
+    "taglibrary",       // Added: for tag_library table
+    "writeoff",         // Added: for write_off table
+    "leadopportunity",  // Added: for lead_opportunity table
+    "chatconversation", // Added: for chat_conversation table
+    "timersession",     // Added: for timer_session table
+    "weeklysubmission", // Added: for weekly_submission table
+    "taskrate",         // Added: for task_rate table
+    "toefolder",        // Added: for toe_folder table
+    "costtracker",      // Added: for cost_tracker table
+    "importjob",        // Added: for import_job table
+    "importjobrow",     // Added: for import_job_row table
+    "jobstatusmap",     // Added: for job_status_map table
+    "usercrosswalk",    // Added: for user_crosswalk table
+    "clientcrosswalk",  // Added: for client_crosswalk table
+    "rolepermissions",  // Added: for role_permissions table (used in rolePermissions.js)
   ];
 
   return serviceRoleEntities.some((pattern) =>

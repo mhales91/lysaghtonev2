@@ -52,12 +52,12 @@ export default function AnalyticsPage() {
             setUsers(userData || []);
 
             if (settingsData && settingsData.length > 0) {
-                setMonthlyBudgets(settingsData[0].monthly_budgets);
+                setMonthlyBudgets(settingsData[0].department_budgets); // Fixed: use department_budgets
             } else {
                 // Create default settings if none exist for the current FY
-                const defaultSettings = { year: currentFY, monthly_budgets: {} };
+                const defaultSettings = { year: currentFY, department_budgets: {} }; // Fixed: use department_budgets
                 const created = await AnalyticsSetting.create(defaultSettings);
-                setMonthlyBudgets(created.monthly_budgets);
+                setMonthlyBudgets(created.department_budgets); // Fixed: use department_budgets
             }
         } catch (error) {
             console.error("Failed to load analytics data", error);
