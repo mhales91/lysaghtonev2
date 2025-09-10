@@ -160,7 +160,7 @@ export default function LysaghtAI() {
       try {
         const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
         const convos = await ChatConversation.filter(
-          { user_email: currentUser.email, ...assistantIdFilter },
+          { created_by: currentUser.email, ...assistantIdFilter },
           '-last_message_at'
         );
         setConversations(convos);
@@ -206,7 +206,7 @@ export default function LysaghtAI() {
       await ChatConversation.delete(conversationId);
       if (currentConversation && currentConversation.id === conversationId) startNewConversation();
       const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
-      const convos = await ChatConversation.filter({ user_email: currentUser.email, ...assistantIdFilter }, '-last_message_at');
+      const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
       setConversations(convos);
       toast({ title: 'Conversation Deleted', description: 'The conversation has been successfully deleted.' });
     } catch (err) {
@@ -345,7 +345,7 @@ export default function LysaghtAI() {
       setMessages(finalMessages);
 
       const conversationData = {
-        user_email: (currentUser && currentUser.email) ? currentUser.email : '',
+        created_by: (currentUser && currentUser.email) ? currentUser.email : '',
         assistant_id: selectedAssistant.isGeneral ? null : selectedAssistant.id,
         messages: finalMessages,
         last_message_at: new Date().toISOString(),
@@ -359,7 +359,7 @@ export default function LysaghtAI() {
         const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
         setCurrentConversation(newConversation);
         const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
-        const convos = await ChatConversation.filter({ user_email: currentUser.email, ...assistantIdFilter }, '-last_message_at');
+        const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
         setConversations(convos);
       }
     } catch (err) {

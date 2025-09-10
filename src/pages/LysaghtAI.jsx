@@ -229,75 +229,6 @@ export default function LysaghtAI() {
 
   const availableModels = ALLOWED_MODELS;
 
-
-
-  // Load conversations from localStorage on localhost
-  const loadConversationsFromStorage = useCallback(() => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost) {
-      try {
-        const storedConversations = localStorage.getItem('lysaghtai_conversations');
-        console.log('Raw stored conversations:', storedConversations);
-        if (storedConversations) {
-          const parsed = JSON.parse(storedConversations);
-          console.log('Parsed conversations from localStorage:', parsed);
-          setConversations(parsed);
-        } else {
-          console.log('No conversations found in localStorage');
-          setConversations([]);
-        }
-      } catch (err) {
-        console.error('Failed to load conversations from localStorage:', err);
-        setConversations([]);
-      }
-    }
-  }, []);
-
-  // Save conversations to localStorage on localhost
-  const saveConversationsToStorage = useCallback((conversations) => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost) {
-      try {
-        console.log('Saving conversations to localStorage:', conversations);
-        localStorage.setItem('lysaghtai_conversations', JSON.stringify(conversations));
-        console.log('Conversations saved successfully to localStorage');
-      } catch (err) {
-        console.error('Failed to save conversations to localStorage:', err);
-      }
-    }
-  }, []);
-
-  // Load messages from localStorage for current conversation
-  const loadMessagesFromStorage = useCallback((conversationId) => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost && conversationId) {
-      try {
-        const storedMessages = localStorage.getItem(`lysaghtai_messages_${conversationId}`);
-        if (storedMessages) {
-          const parsed = JSON.parse(storedMessages);
-          console.log('Loaded messages for conversation', conversationId, ':', parsed);
-          return parsed;
-        }
-      } catch (err) {
-        console.error('Failed to load messages from localStorage:', err);
-        return [];
-      }
-    }
-    return [];
-  }, []);
-
-  // Save messages to localStorage for current conversation
-  const saveMessagesToStorage = useCallback((conversationId, messages) => {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost && conversationId) {
-      try {
-        localStorage.setItem(`lysaghtai_messages_${conversationId}`, JSON.stringify(messages));
-      } catch (err) {
-        console.error('Failed to save messages to localStorage:', err);
-      }
-    }
-  }, []);
-
   useEffect(() => {
     (async () => {
       if (!currentUser) {
@@ -325,11 +256,11 @@ export default function LysaghtAI() {
           }
         }
         
-        // Load conversations from localStorage on localhost
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-          loadConversationsFromStorage();
-        }
+        // Always use database for conversations
+        const assistantIdFilter = selectedAssistant.isGeneral ? {} : { ai_assistant_id: selectedAssistant.id };
+        const filterParams = { user_id: currentUser.id, ...assistantIdFilter };
+        const convos = await ChatConversation.filter(filterParams, '-created_at');
+        setConversations(convos);
       } catch (err) {
         console.error('LysaghtAI: Error loading initial data:', err);
         // Only show error toast for critical errors, not for missing AI assistants
@@ -339,30 +270,7 @@ export default function LysaghtAI() {
       }
       setIsLoadingAssistants(false);
     })();
-  }, [currentUser, toast, loadConversationsFromStorage]);
-
-  useEffect(() => {
-    (async () => {
-      if (!currentUser) return;
-      try {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        if (isLocalhost) {
-          // On localhost, always use localStorage for conversations
-          console.log('Loading conversations from localStorage on localhost');
-          loadConversationsFromStorage();
-        } else {
-          // Production: Load from database
-          const assistantIdFilter = selectedAssistant.isGeneral ? { ai_assistant_id: null } : { ai_assistant_id: selectedAssistant.id };
-          const filterParams = { user_email: currentUser.email, ...assistantIdFilter };
-          const convos = await ChatConversation.filter(filterParams, '-last_message_at');
-          setConversations(convos);
-        }
-      } catch (err) {
-        toast({ title: 'Error', description: `Failed to load conversations: ${err.message}`, variant: 'destructive' });
-      }
-    })();
-  }, [currentUser, selectedAssistant, toast, loadConversationsFromStorage]);
+  }, [currentUser, toast, selectedAssistant]);
 
   useEffect(() => {
     if (!scrollAreaRef.current) return;
@@ -504,15 +412,8 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
       setSelectedAssistant(assistant);
       setCurrentConversation(conversation);
       
-      // Load messages from localStorage on localhost, otherwise use conversation.messages
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocalhost) {
-        const storedMessages = loadMessagesFromStorage(conversation.id);
-        console.log('Loaded messages from localStorage:', storedMessages);
-        setMessages(storedMessages || []);
-      } else {
-        setMessages(conversation.messages || []);
-      }
+      // Always use database messages
+      setMessages(conversation.messages || []);
       
       // Reset all research-related state
       setLastModelId(null);
@@ -536,7 +437,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
     try {
       await ChatConversation.delete(conversationId);
       if (currentConversation && currentConversation.id === conversationId) startNewConversation();
-      const assistantIdFilter = selectedAssistant.isGeneral ? { ai_assistant_id: null } : { ai_assistant_id: selectedAssistant.id };
+      const assistantIdFilter = selectedAssistant.isGeneral ? {} : { ai_assistant_id: selectedAssistant.id };
       // For localhost, skip user_email filter since column doesn't exist
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
       const filterParams = isLocalhost ? assistantIdFilter : { user_email: currentUser.email, ...assistantIdFilter };
@@ -603,10 +504,10 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
     setMessages(updatedMessages);
     
     // Save to localStorage
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    if (isLocalhost && currentConversation) {
-      saveMessagesToStorage(currentConversation.id, updatedMessages);
-    }
+    // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    // if (isLocalhost && currentConversation) {
+    //   saveMessagesToStorage(currentConversation.id, updatedMessages);
+    // }
     
     // Start deep research with all answers
     startDeepResearch();
@@ -853,74 +754,51 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
       setMessages(finalMessages);
       
       // Save messages to localStorage immediately for localhost
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocalhost && currentConversation) {
-        saveMessagesToStorage(currentConversation.id, finalMessages);
-      }
+      // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      // if (isLocalhost && currentConversation) {
+      //   saveMessagesToStorage(currentConversation.id, finalMessages);
+      // }
 
       // Handle conversation saving (same logic as before)
       const conversationData = {
-        ...(isLocalhost ? {} : { user_email: (currentUser && currentUser.email) ? currentUser.email : '' }),
-        ai_assistant_id: selectedAssistant.isGeneral ? null : selectedAssistant.id,
-        ...(isLocalhost ? {} : { 
-          messages: finalMessages,
-          last_message_at: new Date().toISOString(),
-          message_count: finalMessages.length 
-        })
+        user_id: currentUser.id,
+        ...(selectedAssistant.isGeneral ? {} : { ai_assistant_id: selectedAssistant.id }), // Only include if not general
+        messages: finalMessages,
+        last_message_at: new Date().toISOString(),
+        message_count: finalMessages.length
       };
 
       // Handle conversation saving
-      if (isLocalhost) {
-        // Use localStorage for localhost
-        if (currentConversation) {
-          // Update existing conversation
-          const updatedConversation = {
-            ...currentConversation,
-            ...conversationData,
-            updated_at: new Date().toISOString()
-          };
-          setCurrentConversation(updatedConversation);
-          
-          // Update conversations list
-          const updatedConversations = conversations.map(conv => 
-            conv.id === currentConversation.id ? updatedConversation : conv
-          );
-          setConversations(updatedConversations);
-          saveConversationsToStorage(updatedConversations);
-          
-          // Save messages to localStorage
-          saveMessagesToStorage(currentConversation.id, finalMessages);
-        } else {
-          // Create new conversation
-          const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const conversationTitle = generateConversationTitle(userMessage.content);
-          const newConversation = {
-            id: conversationId,
-            title: conversationTitle,
-            ...conversationData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          setCurrentConversation(newConversation);
-          
-          // Add to conversations list
-          const updatedConversations = [newConversation, ...conversations];
-          setConversations(updatedConversations);
-          saveConversationsToStorage(updatedConversations);
-          
-          // Save messages to localStorage
-          saveMessagesToStorage(conversationId, finalMessages);
-        }
+      // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (currentConversation) {
+        // Update existing conversation
+        const updatedConversation = {
+          ...currentConversation,
+          ...conversationData,
+          updated_at: new Date().toISOString()
+        };
+        setCurrentConversation(updatedConversation);
+        
+        // Update conversations list
+        const updatedConversations = conversations.map(conv => 
+          conv.id === currentConversation.id ? updatedConversation : conv
+        );
+        setConversations(updatedConversations);
+        
+        // Save messages to localStorage
+        // saveMessagesToStorage(currentConversation.id, finalMessages);
       } else {
-        // Use database for production
-        if (currentConversation) {
-          await ChatConversation.update(currentConversation.id, conversationData);
-        } else {
-          const conversationTitle = generateConversationTitle(userMessage.content);
-          const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
-          setCurrentConversation(newConversation);
-        }
+        // Create new conversation
+        const conversationTitle = generateConversationTitle(userMessage.content);
+        const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
+        setCurrentConversation(newConversation);
+        
+        // Add to conversations list
+        const updatedConversations = [newConversation, ...conversations];
+        setConversations(updatedConversations);
+        
+        // Save messages to localStorage
+        // saveMessagesToStorage(conversationId, finalMessages);
       }
 
     } catch (err) {
@@ -933,7 +811,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
       setMessages(prev => [...prev, errorMessage]);
       throw err;
     }
-  }, [selectedAssistant, selectedModel, actionType, imageSize, imageQuality, imageCount, currentUser, conversations, currentConversation, saveConversationsToStorage, saveMessagesToStorage, generateConversationTitle]);
+  }, [selectedAssistant, selectedModel, actionType, imageSize, imageQuality, imageCount, currentUser, conversations, currentConversation, generateConversationTitle]);
 
   async function handleSendMessage(e) {
     e.preventDefault();
@@ -1143,74 +1021,51 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
       setMessages(finalMessages);
       
       // Save messages to localStorage immediately for localhost
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocalhost && currentConversation) {
-        saveMessagesToStorage(currentConversation.id, finalMessages);
-      }
+      // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      // if (isLocalhost && currentConversation) {
+      //   saveMessagesToStorage(currentConversation.id, finalMessages);
+      // }
 
       // For localhost, skip user_email and last_message_at since columns don't exist
       const conversationData = {
-        ...(isLocalhost ? {} : { user_email: (currentUser && currentUser.email) ? currentUser.email : '' }),
-        ai_assistant_id: selectedAssistant.isGeneral ? null : selectedAssistant.id,
-        ...(isLocalhost ? {} : { 
-          messages: finalMessages,
-          last_message_at: new Date().toISOString(),
-          message_count: finalMessages.length 
-        })
+        user_id: currentUser.id,
+        ...(selectedAssistant.isGeneral ? {} : { ai_assistant_id: selectedAssistant.id }), // Only include if not general
+        messages: finalMessages,
+        last_message_at: new Date().toISOString(),
+        message_count: finalMessages.length
       };
 
       // Handle conversation saving
-      if (isLocalhost) {
-        // Use localStorage for localhost
-        if (currentConversation) {
-          // Update existing conversation
-          const updatedConversation = {
-            ...currentConversation,
-            ...conversationData,
-            updated_at: new Date().toISOString()
-          };
-          setCurrentConversation(updatedConversation);
-          
-          // Update conversations list
-          const updatedConversations = conversations.map(conv => 
-            conv.id === currentConversation.id ? updatedConversation : conv
-          );
-          setConversations(updatedConversations);
-          saveConversationsToStorage(updatedConversations);
-          
-          // Save messages to localStorage
-          saveMessagesToStorage(currentConversation.id, finalMessages);
-        } else {
-          // Create new conversation
-          const conversationId = `conv_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const conversationTitle = generateConversationTitle(userMessage.content);
-          const newConversation = {
-            id: conversationId,
-            title: conversationTitle,
-            ...conversationData,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          setCurrentConversation(newConversation);
-          
-          // Add to conversations list
-          const updatedConversations = [newConversation, ...conversations];
-          setConversations(updatedConversations);
-          saveConversationsToStorage(updatedConversations);
-          
-          // Save messages to localStorage
-          saveMessagesToStorage(conversationId, finalMessages);
-        }
+      // const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (currentConversation) {
+        // Update existing conversation
+        const updatedConversation = {
+          ...currentConversation,
+          ...conversationData,
+          updated_at: new Date().toISOString()
+        };
+        setCurrentConversation(updatedConversation);
+        
+        // Update conversations list
+        const updatedConversations = conversations.map(conv => 
+          conv.id === currentConversation.id ? updatedConversation : conv
+        );
+        setConversations(updatedConversations);
+        
+        // Save messages to localStorage
+        // saveMessagesToStorage(currentConversation.id, finalMessages);
       } else {
-        // Use database for production
-        if (currentConversation) {
-          await ChatConversation.update(currentConversation.id, conversationData);
-        } else {
-          const conversationTitle = generateConversationTitle(userMessage.content);
-          const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
-          setCurrentConversation(newConversation);
-        }
+        // Create new conversation
+        const conversationTitle = generateConversationTitle(userMessage.content);
+        const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
+        setCurrentConversation(newConversation);
+        
+        // Add to conversations list
+        const updatedConversations = [newConversation, ...conversations];
+        setConversations(updatedConversations);
+        
+        // Save messages to localStorage
+        // saveMessagesToStorage(conversationId, finalMessages);
       }
     } catch (err) {
       const errorMessage = {
