@@ -87,6 +87,12 @@ const ProtectedLayout = ({ children, currentPageName }) => {
       return { navItems: [], adminItems: [] };
     }
 
+    // If permissions aren't loaded yet, show all items temporarily
+    if (!permissionsLoaded) {
+      console.log('⚠️ Permissions not loaded yet, showing all items temporarily');
+      return { navItems: allNavigationItems, adminItems: adminNavigationItems };
+    }
+
     // Check what permissions are available for this role
     const permissions = getRolePermissions(userRole);
     console.log('📋 Permissions for role', userRole, ':', permissions);
@@ -146,11 +152,6 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   // Load user data and set up navigation
   useEffect(() => {
     const loadUserAndNavigation = async () => {
-      if (!permissionsLoaded) {
-        console.log('Waiting for permissions to load...');
-        return;
-      }
-      
       try {
         console.log('Loading user data from database...');
         const user = await User.me();
@@ -229,7 +230,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';
   const canAccessUserMgmt = currentUser ? canAccessUserManagement(currentUser.user_role) : false;
 
-  if (isAuthLoading || !permissionsLoaded) {
+  if (isAuthLoading) {
     return <PageLoadingSkeleton title="Loading..." />;
   }
 
