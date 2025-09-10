@@ -1,14 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Handle both Vite (import.meta.env) and Node.js (process.env) environments
-const getEnvVar = (key, defaultValue) => {
-  if (typeof import.meta !== 'undefined' && import.meta.env) {
-    return import.meta.env[key] || defaultValue
-  }
-  return process.env[key] || defaultValue
-}
+// Hardcode the values temporarily to test
+const supabaseUrl = 'https://lysaghtone.com/'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzU2NjgxMjkxLCJleHAiOjIwNzIyNTcyOTF9.K9TQ3pH-FP8ejqSkW_aFaYiDv5RNqfcLCwTdae6on04'
 
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL', 'https://lysaghtone.com/')
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0')
+console.log(' Hardcoded Supabase URL:', supabaseUrl)
+console.log(' Hardcoded Supabase Key (first 20 chars):', supabaseAnonKey.substring(0, 20) + '...')
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)

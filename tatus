@@ -11,3 +11,8 @@
    </head>[m
    <body>[m
      <div id="root"></div>[m
+[33m6901695[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Fix User.me() to use regular supabase client instead of admin client for RLS context
+[33m7e17731[m Fix login blocking issue - allow user loading without waiting for permissions
+[33mb3f7483[m Add comprehensive debugging to permission system
+[33mac53ff5[m Fix user data loading to use database instead of localStorage
+[33mfc51773[m Implement database-driven role permissions system

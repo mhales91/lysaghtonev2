@@ -3,22 +3,35 @@ import { supabase } from '@/lib/supabase-client';
 // Get all role permissions from database
 export const getRolePermissions = async () => {
   try {
+    console.log('🔍 Attempting to fetch all role permissions...');
+    
+    // Try the most basic query possible - no ordering, no filters
     const { data, error } = await supabase
       .from('role_permissions')
-      .select('*')
-      .order('role');
+      .select('user_role, permissions');
     
     if (error) {
       console.error('Error fetching role permissions:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       return {};
     }
     
-    // Convert array to object keyed by role
+    console.log('✅ Successfully fetched role permissions:', data);
+    
+    // Convert array to object keyed by user_role
     const permissionsMap = {};
     data.forEach(item => {
-      permissionsMap[item.role] = item.permissions;
+      if (item.user_role && item.user_role.trim() !== '') {
+        permissionsMap[item.user_role] = item.permissions;
+      }
     });
     
+    console.log('✅ Final permissions map:', permissionsMap);
     return permissionsMap;
   } catch (error) {
     console.error('Error in getRolePermissions:', error);
@@ -29,10 +42,15 @@ export const getRolePermissions = async () => {
 // Get permissions for a specific role
 export const getRolePermission = async (role) => {
   try {
+    if (!role || role.trim() === '') {
+      console.error('Empty or invalid role provided:', role);
+      return [];
+    }
+    
     const { data, error } = await supabase
       .from('role_permissions')
       .select('permissions')
-      .eq('role', role)
+      .eq('user_role', role)
       .single();
     
     if (error) {
@@ -53,7 +71,7 @@ export const updateRolePermission = async (role, permissions) => {
     const { data, error } = await supabase
       .from('role_permissions')
       .upsert({
-        role: role,
+        user_role: role,
         permissions: permissions,
         updated_at: new Date().toISOString()
       })
@@ -76,7 +94,7 @@ export const updateRolePermission = async (role, permissions) => {
 export const updateMultipleRolePermissions = async (permissionsMap) => {
   try {
     const updates = Object.entries(permissionsMap).map(([role, permissions]) => ({
-      role: role,
+      user_role: role,
       permissions: permissions,
       updated_at: new Date().toISOString()
     }));

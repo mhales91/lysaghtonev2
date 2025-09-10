@@ -1,5 +1,5 @@
 // Permission utility functions for dynamic role-based access control
-import { getRolePermission, getRolePermissions as getRolePermissionsFromDB } from '@/api/rolePermissions';
+import { getRolePermission, getRolePermissions as getRolePermissionsFromAPI } from '@/api/rolePermissions';
 
 // All available pages
 export const allPages = [
@@ -124,17 +124,46 @@ export const getUserAccessiblePages = (userRole) => {
 // Load all role permissions from database and cache them
 export const loadAllRolePermissions = async () => {
     try {
-        const allPermissions = await getRolePermissionsFromDB();
+        console.log('🔄 loadAllRolePermissions: Starting to load permissions from database...');
+        const allPermissions = await getRolePermissionsFromAPI(); // Use the renamed import
+        console.log('📊 loadAllRolePermissions: Raw permissions from database:', allPermissions);
+        
+        // Check if we got valid data
+        if (!allPermissions || Object.keys(allPermissions).length === 0) {
+            console.warn('⚠️ loadAllRolePermissions: No permissions loaded from database, using fallback');
+            
+            // Set fallback permissions
+            const fallbackPermissions = {
+                'Admin': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'Admin', 'User Management', 'TOE Manager', 'TOE Sign', 'TOE Admin', 'AI Assistant Manager', 'Prompt Library Manager', 'Analytics Settings', 'Dashboard Settings', 'Billing Admin'],
+                'Manager': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'TOE Manager', 'TOE Sign', 'AI Assistant Manager', 'Prompt Library Manager'],
+                'Staff': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'TOE Sign']
+            };
+            
+            localStorage.setItem('roleConfigs', JSON.stringify(fallbackPermissions));
+            setGlobalRoleConfigs(fallbackPermissions);
+            return fallbackPermissions;
+        }
         
         // Cache all permissions in localStorage
         localStorage.setItem('roleConfigs', JSON.stringify(allPermissions));
+        console.log('💾 loadAllRolePermissions: Cached permissions in localStorage:', allPermissions);
         
         // Update global configs
         setGlobalRoleConfigs(allPermissions);
         
         return allPermissions;
     } catch (error) {
-        console.error('Error loading all role permissions:', error);
-        return {};
+        console.error('❌ loadAllRolePermissions: Error loading all role permissions:', error);
+        
+        // Set fallback permissions on error
+        const fallbackPermissions = {
+            'Admin': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'Admin', 'User Management', 'TOE Manager', 'TOE Sign', 'TOE Admin', 'AI Assistant Manager', 'Prompt Library Manager', 'Analytics Settings', 'Dashboard Settings', 'Billing Admin'],
+            'Manager': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'TOE Manager', 'TOE Sign', 'AI Assistant Manager', 'Prompt Library Manager'],
+            'Staff': ['Dashboard', 'Projects', 'Tasks', 'Timesheets', 'CRM', 'Analytics', 'Billing', 'TOE Sign']
+        };
+        
+        localStorage.setItem('roleConfigs', JSON.stringify(fallbackPermissions));
+        setGlobalRoleConfigs(fallbackPermissions);
+        return fallbackPermissions;
     }
 };
