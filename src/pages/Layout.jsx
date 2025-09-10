@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import ErrorBoundary from "@/components/ui/error-boundary";
 import GlobalSearch from "@/components/layout/GlobalSearch";
 import { UserProvider } from '@/contexts/UserContext';
-import { canAccessUserManagement, hasPermission } from '@/utils/permissions';
+import { canAccessUserManagement, hasPermission, loadAllRolePermissions } from '@/utils/permissions';
 import {
   LayoutDashboard,
   Users,
@@ -76,6 +76,7 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const [visibleAdminItems, setVisibleAdminItems] = useState([]);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [navRefreshTrigger, setNavRefreshTrigger] = useState(0);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false);
 
   // Function to filter navigation items based on user permissions
   const filterNavigationItems = (userRole) => {
@@ -93,6 +94,22 @@ const ProtectedLayout = ({ children, currentPageName }) => {
 
     return { navItems, adminItems };
   };
+
+  // Load permissions from database on app startup
+  useEffect(() => {
+    const loadPermissions = async () => {
+      try {
+        await loadAllRolePermissions();
+        setPermissionsLoaded(true);
+      } catch (error) {
+        console.error('Failed to load permissions from database:', error);
+        // Still set permissions loaded to true to prevent infinite loading
+        setPermissionsLoaded(true);
+      }
+    };
+
+    loadPermissions();
+  }, []);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -136,18 +153,22 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         setIsAuthLoading(false);
       }
     };
-    fetchUser();
-  }, []);
+    
+    // Only fetch user after permissions are loaded
+    if (permissionsLoaded) {
+      fetchUser();
+    }
+  }, [permissionsLoaded]);
 
   // Refresh navigation when permissions might have changed
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && permissionsLoaded) {
       const userRole = currentUser.user_role || 'Staff';
       const { navItems, adminItems } = filterNavigationItems(userRole);
       setVisibleNavItems(navItems);
       setVisibleAdminItems(adminItems);
     }
-  }, [navRefreshTrigger, currentUser]);
+  }, [navRefreshTrigger, currentUser, permissionsLoaded]);
 
   // Listen for permission changes
   useEffect(() => {
@@ -162,10 +183,9 @@ const ProtectedLayout = ({ children, currentPageName }) => {
   const isAdmin = currentUser?.user_role === 'Admin' || currentUser?.user_role === 'Director';
   const canAccessUserMgmt = currentUser ? canAccessUserManagement(currentUser.user_role) : false;
 
-  if (isAuthLoading) {
-    return <PageLoadingSkeleton title="Authenticating..." />;
+  if (isAuthLoading || !permissionsLoaded) {
+    return <PageLoadingSkeleton title="Loading..." />;
   }
-
 
   // Show pending approval screen
   if (currentUser?.isPendingApproval) {

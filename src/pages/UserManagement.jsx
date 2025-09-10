@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase-client';
 import UserEditForm from '../components/admin/UserEditForm'; // Assuming this component exists
-import { canAccessUserManagement, setGlobalRoleConfigs } from '@/utils/permissions';
+import { canAccessUserManagement, setGlobalRoleConfigs, loadAllRolePermissions } from '@/utils/permissions';
+import { updateRolePermission, updateMultipleRolePermissions, initializeRolePermissions } from '@/api/rolePermissions';
 import { useUser } from '@/contexts/UserContext';
 
 export default function UserManagementPage() {
@@ -86,25 +87,14 @@ export default function UserManagementPage() {
         'Client': 6
     };
 
-    // Load role configurations from localStorage
-    const loadRoleConfigs = () => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            const saved = localStorage.getItem('roleConfigs');
-            if (saved) {
-                setRoleConfigs(JSON.parse(saved));
-            } else {
-                // Default configurations
-                const defaultConfigs = {
-                    'Admin': allPages,
-                    'Director': allPages,
-                    'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                    'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                    'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-                };
-                setRoleConfigs(defaultConfigs);
-                localStorage.setItem('roleConfigs', JSON.stringify(defaultConfigs));
-            }
+    // Load role configurations from database
+    const loadRoleConfigs = async () => {
+        try {
+            const permissions = await loadAllRolePermissions();
+            setRoleConfigs(permissions);
+        } catch (error) {
+            console.error('Error loading role configurations:', error);
+            toast.error('Failed to load role configurations');
         }
     };
 
@@ -130,33 +120,9 @@ export default function UserManagementPage() {
         }
     };
 
-    // Role-based page permissions for localhost only
+    // Role-based page permissions from database
     const getRolePermissions = (role) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (isLocalhost) {
-            // If role has a specific configuration, use it; otherwise use default
-            if (roleConfigs[role] && roleConfigs[role].length > 0) {
-                return roleConfigs[role];
-            }
-            // Fallback to default configuration
-            const defaultPermissions = {
-                'Admin': allPages,
-                'Director': allPages,
-                'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-                'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-                'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-            };
-            return defaultPermissions[role] || [];
-        }
-        // Fallback for production
-        const permissions = {
-            'Admin': allPages,
-            'Director': allPages,
-            'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-            'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-            'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-        };
-        return permissions[role] || [];
+        return roleConfigs[role] || [];
     };
 
     // Get widget permissions for a role
@@ -293,41 +259,53 @@ export default function UserManagementPage() {
         }
     };
 
-    // Role configuration functions for localhost only
+    // Role configuration functions
     const handleEditRole = (role) => {
         setEditingRole(role);
         setSelectedPages(getRolePermissions(role));
         setShowRoleConfig(true);
     };
 
-    const handleSaveRoleConfig = (role, selectedPages) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // Always update the role configs state
-        const updatedConfigs = {
-            ...roleConfigs,
-            [role]: selectedPages
-        };
-        setRoleConfigs(updatedConfigs);
-        
-        // Update global role configs so other components can see the changes
-        setGlobalRoleConfigs(updatedConfigs);
-        
-        if (isLocalhost) {
-            // Save to localStorage on localhost
+    const handleSaveRoleConfig = async (role, selectedPages) => {
+        try {
+            // Update the role configs state
+            const updatedConfigs = {
+                ...roleConfigs,
+                [role]: selectedPages
+            };
+            setRoleConfigs(updatedConfigs);
+            
+            // Update global role configs so other components can see the changes
+            setGlobalRoleConfigs(updatedConfigs);
+            
+            // Save to database
+            await updateRolePermission(role, selectedPages);
+            
+            // Also save to localStorage for performance
             localStorage.setItem('roleConfigs', JSON.stringify(updatedConfigs));
-        } else {
-            // On production, we could save to database here if needed
-            // For now, just keep in memory for the session
-            console.log('Role permissions updated for session:', role, selectedPages);
+            
+            toast.success(`Role permissions updated for ${role}`);
+            setShowRoleConfig(false);
+            setEditingRole(null);
+            
+            // Trigger navigation refresh
+            window.dispatchEvent(new CustomEvent('permissionsChanged'));
+        } catch (error) {
+            console.error('Failed to save role configuration:', error);
+            toast.error('Failed to save role configuration');
         }
-        
-        toast.success(`Role permissions updated for ${role}`);
-        setShowRoleConfig(false);
-        setEditingRole(null);
-        
-        // Trigger navigation refresh
-        window.dispatchEvent(new CustomEvent('permissionsChanged'));
+    };
+
+    // Initialize role permissions (for first-time setup)
+    const handleInitializePermissions = async () => {
+        try {
+            await initializeRolePermissions();
+            await loadRoleConfigs();
+            toast.success('Role permissions initialized successfully');
+        } catch (error) {
+            console.error('Failed to initialize permissions:', error);
+            toast.error('Failed to initialize permissions');
+        }
     };
 
     // Delete user function for localhost only
@@ -484,12 +462,8 @@ export default function UserManagementPage() {
         }
     };
 
-    // Component to show accessible pages for localhost only
+    // Component to show accessible pages
     const AccessiblePages = ({ user }) => {
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        if (!isLocalhost) return null;
-        
         const accessiblePages = getRolePermissions(user.user_role);
         
         return (
@@ -666,6 +640,16 @@ export default function UserManagementPage() {
                     <h1 className="text-3xl font-bold text-gray-900 mb-2">User Management</h1>
                     <p className="text-gray-600">Approve, manage, and assign roles to users.</p>
                     
+                    {/* Initialize permissions button */}
+                    <div className="mt-4">
+                        <Button 
+                            onClick={handleInitializePermissions}
+                            className="bg-blue-600 hover:bg-blue-700 text-white mr-2"
+                        >
+                            Initialize Role Permissions
+                        </Button>
+                    </div>
+                    
                     {/* Debug button for localhost */}
                     {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
                         <div className="mt-4">
@@ -767,7 +751,7 @@ export default function UserManagementPage() {
                                         <TableCell colSpan="6">Loading users...</TableCell>
                                     </TableRow>
                                 ) : activeTab === 'roles' ? (
-                                    // Role Configuration Tab (localhost only)
+                                    // Role Configuration Tab
                                     <TableRow>
                                         <TableCell colSpan="6">
                                             <div className="p-6">
