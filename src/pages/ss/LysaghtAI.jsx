@@ -434,6 +434,13 @@ export default function LysaghtAI() {
     setShowPromptLibrary(false);
   }
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage(e);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-white text-gray-800">
       <div className="w-72 bg-[#F9F9F9] flex flex-col border-r border-gray-200">
@@ -648,12 +655,7 @@ export default function LysaghtAI() {
             <Textarea
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage(e);
-                }
-              }}
+              onKeyDown={handleKeyDown}
               placeholder={
                 selectedAssistant
                   ? (actionType === 'generate_image'
