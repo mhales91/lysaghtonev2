@@ -11,7 +11,7 @@ import {
   chatWithRetrieval as realChatWithRetrieval, 
   chatStandard as realChatStandard 
 } from '@/api/aiFunctionsMinimal';
-import { UploadFile } from '@/api/integrations';
+// import { UploadFile } from '@/api/integrations';
 import { Bot, Send, User as UserIcon, Sparkles, MessageCircle, Trash2, Paperclip, X, BookText, Edit2, Loader } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
