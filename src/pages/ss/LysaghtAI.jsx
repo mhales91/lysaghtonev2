@@ -289,7 +289,7 @@ export default function LysaghtAI() {
           history: messages,
           fileUrls: fileUrls.length ? fileUrls : undefined
         });
-        responseData = apiResponse.data;
+        responseData = apiResponse;
       } else {
         const safeAssistant = {
           ...selectedAssistant,
@@ -321,7 +321,7 @@ export default function LysaghtAI() {
             fileUrls: fileUrls.length ? fileUrls : undefined
           });
         }
-        responseData = apiResponse.data;
+        responseData = apiResponse;
       }
 
       if (!responseData || !responseData.success) {
