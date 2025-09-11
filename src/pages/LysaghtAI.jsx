@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AIAssistant, ChatConversation, User } from '@/api/entities';
+import { AIAssistant, ChatConversation, User } from '@/api/entitiesDirect';
 import { useUser } from '@/contexts/UserContext';
 // Remove problematic imports that cause 'rt' error on Vercel
 import { 
