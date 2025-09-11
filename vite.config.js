@@ -6,12 +6,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     sourcemap: true,  // This enables source maps for debugging
-    minify: 'terser', // or 'esbuild' for faster builds
-    rollupOptions: {
-      output: {
-        sourcemap: true, // Ensure source maps are generated
-      }
-    }
+    minify: 'esbuild', // Use esbuild instead of terser (faster and built-in)
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") }
