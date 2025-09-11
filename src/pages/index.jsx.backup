@@ -146,8 +146,6 @@ function PagesContent() {
                 
                 <Route path="/Projects" element={<Projects />} />
                 
-                <Route path="/ChatTest" element={<ChatTest />} />
-                
                 <Route path="/Billing" element={<Billing />} />
                 
                 <Route path="/Tasks" element={<Tasks />} />
@@ -187,6 +185,8 @@ function PagesContent() {
                 <Route path="/DashboardSettings" element={<DashboardSettings />} />
                 
                 <Route path="/Agent" element={<Agent />} />
+                
+                <Route path="/ChatTest" element={<ChatTest />} />
                     </Routes>
                 </Layout>
             } />

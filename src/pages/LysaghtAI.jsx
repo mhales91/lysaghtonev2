@@ -3,24 +3,49 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AIAssistant, ChatConversation, User } from '@/api/entities';
+// Mock implementations to avoid server imports
+const AIAssistant = {
+  filter: async () => [],
+  update: async () => {},
+  create: async () => {}
+};
+
+const ChatConversation = {
+  filter: async () => [],
+  create: async () => ({ id: Date.now(), title: "New Chat" }),
+  update: async () => {},
+  delete: async () => {}
+};
+
+const User = {
+  filter: async () => []
+};
+
+const UploadFile = async () => ({ file_url: "mock-url" });
+
+// import { AIAssistant, ChatConversation, User } from '@/api/entities';
 import { useUser } from '@/contexts/UserContext';
-import { openaiAdvanced, openaiChat } from '@/api/functions';
-import { chatWithRetrieval } from '@/api/functions/chatWithRetrieval';
-import { chatStandard } from '@/api/functions/chatStandard';
-import { 
-  openaiAdvanced as realOpenaiAdvanced, 
-  openaiChat as realOpenaiChat, 
-  chatWithRetrieval as realChatWithRetrieval, 
-  chatStandard as realChatStandard 
-} from '@/api/openaiFunctions';
+// API call function - replaces direct server imports
+async function callChatAPI(params) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params)
+  });
+  
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status}`);
+  }
+  
+  return await response.json();
+}
 
 // Helper function to check if model is a deep research model
 function isDeepResearchModel(model) {
   const m = String(model || '').trim().toLowerCase();
   return m.includes('deep-research') || m.includes('o3-deep-research') || m.includes('o4-mini-deep-research');
 }
-import { UploadFile } from '@/api/integrations';
+// import { UploadFile } from '@/api/integrations';
 import { Bot, Send, User as UserIcon, Sparkles, MessageCircle, Trash2, Paperclip, X, BookText, Edit2, Loader } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -306,7 +331,7 @@ Return ONLY a JSON array of question objects with this exact structure:
 
 Make questions relevant to the topic and helpful for comprehensive research. Mix select and text questions. Keep questions concise and actionable.`;
 
-        const response = await realOpenaiAdvanced({
+        const response = await callChatAPI({
           prompt: prompt,
           model: 'gpt-4o',
           action: 'chat',
@@ -632,7 +657,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           console.log('Using real OpenAI functions for deep research on localhost');
           console.log('Selected model for deep research:', effectiveModel);
           console.log('Action type:', actionType);
-          apiResponse = await realOpenaiAdvanced({
+          apiResponse = await callChatAPI({
             prompt: userMessage.content,
             model: effectiveModel,
             action: 'deep_research',
@@ -647,7 +672,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
             })
           });
         } else {
-          apiResponse = await openaiAdvanced({
+          apiResponse = await callChatAPI({
             prompt: userMessage.content,
             model: effectiveModel,
             action: 'deep_research',
@@ -674,7 +699,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           // Use real OpenAI functions for localhost
           console.log('Using real OpenAI functions for specialized assistant on localhost');
           if (useRetrieval) {
-            apiResponse = await realChatWithRetrieval({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: {
@@ -685,7 +710,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await realChatStandard({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: safeAssistant,
@@ -694,7 +719,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await chatWithRetrieval({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: {
@@ -705,7 +730,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await chatStandard({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: safeAssistant,
@@ -889,7 +914,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         const hint = (selectedAssistant.system_prompt || '') +
           `\n\n[Meta instruction: The active OpenAI model id for this chat is "${effectiveModel}". If the user asks what model you are, answer exactly "${effectiveModel}".]`;
 
-        // For localhost, try openaiAdvanced first, fallback to openaiChat if not available
+        // For localhost, try callChatAPI first, fallback to openaiChat if not available
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         let apiResponse;
         
@@ -898,7 +923,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           console.log('Using real OpenAI functions for localhost');
           console.log('Selected model:', effectiveModel);
           console.log('Action type:', actionType);
-          apiResponse = await realOpenaiAdvanced({
+          apiResponse = await callChatAPI({
             prompt: userMessage.content,
             model: effectiveModel,
             action: actionType,
@@ -912,10 +937,10 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               n: imageCount
             })
           });
-          console.log('apiResponse from realOpenaiAdvanced:', apiResponse);
+          console.log('apiResponse from callChatAPI:', apiResponse);
           console.log('Model used in deep research API response:', apiResponse?.model_used);
         } else {
-          apiResponse = await openaiAdvanced({
+          apiResponse = await callChatAPI({
             prompt: userMessage.content,
             model: effectiveModel,
             action: actionType,
@@ -941,7 +966,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           // Use real OpenAI functions for localhost
           console.log('Using real OpenAI functions for specialized assistant on localhost');
           if (useRetrieval) {
-            apiResponse = await realChatWithRetrieval({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: messages,
               assistantConfig: {
@@ -952,7 +977,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await realChatStandard({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: messages,
               assistantConfig: safeAssistant,
@@ -961,7 +986,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await chatWithRetrieval({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: messages,
               assistantConfig: {
@@ -972,7 +997,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await chatStandard({
+            apiResponse = await callChatAPI({
               message: userMessage.content,
               history: messages,
               assistantConfig: safeAssistant,
@@ -1176,7 +1201,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         }
       }
       
-      const result = await realOpenaiAdvanced({
+      const result = await callChatAPI({
         action: "create_variations",
         image: file,
         n: 3,
@@ -1270,7 +1295,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         }
       }
       
-      const result = await realOpenaiAdvanced({
+      const result = await callChatAPI({
         action: "edit_image",
         image: file,
         prompt: editPrompt,
@@ -1662,3 +1687,5 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
     </div>
   );
 }
+
+

@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
-import { InvokeLLM } from "@/api/integrations";
 import { TagLibrary, CompanySettings, TOESignature, TaskTemplate, Client, User, TOELibraryItem } from "@/api/entities";
 import { handleSignature } from "@/api/signature-functions";
 import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, FileDown, Share, Edit2, UserCheck } from "lucide-react";
+import { toast } from 'sonner';
 
 import CostCalculator from "./CostCalculator";
 import TagSelector from "./TagSelector"; // This component might still be useful for general tags, but its specific uses in Scope/Assumptions/Exclusions steps are replaced by library items.
@@ -36,6 +36,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const [libraryItems, setLibraryItems] = useState([]); // New state for library items
   const [reviewers, setReviewers] = useState([]); // For internal review step
   const [showPreReviewVersion, setShowPreReviewVersion] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   const [formData, setFormData] = useState({
     client_id: toe?.client_id || '',
@@ -47,7 +48,8 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     assumptions: toe?.assumptions || '',
     exclusions: toe?.exclusions || '',
     version: toe?.version || '1.0',
-    ai_tags: toe?.ai_tags || []
+    ai_tags: toe?.ai_tags || [],
+    project_summary: toe?.project_summary || ''
   });
 
   useEffect(() => {
@@ -240,11 +242,111 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     );
   };
 
+  // AI Project Summary Generation
+  const generateProjectSummary = async () => {
+    if (!formData.project_title || !getSelectedClient()) {
+      toast.error('Project title and client selection required for AI summary generation');
+      return;
+    }
+
+    setIsGeneratingSummary(true);
+    
+    try {
+      const prompt = `Generate a professional project summary for a Terms of Engagement document based on the following information:
+
+PROJECT DETAILS:
+- Project Title: ${formData.project_title}
+- Client: ${getSelectedClient()?.company_name || getSelectedClient()?.name}
+- Contact Person: ${getSelectedClient()?.contact_person || 'Not specified'}
+- Project Location: ${getSelectedClient()?.address ? 
+  `${getSelectedClient().address.street || ''}, ${getSelectedClient().address.city || ''} ${getSelectedClient().address.postcode || ''}`.trim() : 
+  'Not specified'}
+
+SCOPE OF WORK:
+${formData.scope_of_work || 'Not defined'}
+
+FEE STRUCTURE:
+${formData.fee_structure?.map(item => `- ${item.description}: $${item.cost}`).join('\n') || 'Not defined'}
+
+ASSUMPTIONS:
+${formData.assumptions || 'Not defined'}
+
+EXCLUSIONS:
+${formData.exclusions || 'Not defined'}
+
+Please generate a comprehensive project summary that:
+1. Provides a clear overview of the project scope and objectives
+2. Highlights key deliverables and outcomes
+3. Mentions the project location and client context
+4. Summarizes the professional services to be provided
+5. Is written in a professional, client-facing tone
+6. Is suitable for inclusion in a formal Terms of Engagement document
+7. Should be 2-3 paragraphs in length
+8. Focuses on the value and outcomes for the client
+
+The summary should be compelling and help the client understand exactly what they will receive from this engagement.`;
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          prompt,
+          model: 'gpt-4o-mini',
+          systemPrompt: 'You are a professional business consultant specializing in creating clear, compelling project summaries for Terms of Engagement documents. Focus on client value and professional outcomes.'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.response) {
+        handleInputChange('project_summary', data.response);
+        toast.success('Project summary generated successfully!');
+      } else {
+        throw new Error(data.error || 'No summary generated');
+      }
+    } catch (error) {
+      console.error('Error generating project summary:', error);
+      toast.error(`Error generating project summary: ${error.message}`);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  // Project Summary Validation
+  const validateProjectSummary = () => {
+    if (!formData.project_summary?.trim()) {
+      return { isValid: false, message: 'Project summary is required for the introductory letter' };
+    }
+    
+    if (formData.project_summary.length < 50) {
+      return { isValid: false, message: 'Project summary should be at least 50 characters long' };
+    }
+    
+    if (formData.project_summary.length > 2000) {
+      return { isValid: false, message: 'Project summary should be less than 2000 characters' };
+    }
+    
+    return { isValid: true, message: 'Project summary looks good!' };
+  };
+
   const handleSubmit = async () => {
     setIsSaving(true);
     
     try {
       const { subtotal, total } = calculateTotals();
+      
+      // Validate project summary
+      const summaryValidation = validateProjectSummary();
+      if (!summaryValidation.isValid) {
+        toast.error(summaryValidation.message);
+        setIsSaving(false);
+        return;
+      }
       
       // Clean and validate the data before sending
       const submitData = {
@@ -257,7 +359,8 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
         assumptions: formData.assumptions?.trim(),
         exclusions: formData.exclusions?.trim(),
         version: formData.version,
-        ai_tags: formData.ai_tags || [], // ai_tags are preserved if they exist on the initial TOE object.
+        ai_tags: formData.ai_tags || [],
+        project_summary: formData.project_summary?.trim(),
         total_fee: subtotal,
         total_fee_with_gst: total,
         status: 'draft'
@@ -265,7 +368,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
 
       // Validate required fields
       if (!submitData.client_id || !submitData.project_title) {
-        alert('Please fill in all required fields (Client and Project Title)');
+        toast.error('Please fill in all required fields (Client and Project Title)');
         setIsSaving(false);
         return;
       }
@@ -273,7 +376,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
       await onSave(submitData, { reviewers });
     } catch (error) {
       console.error('Error saving TOE:', error);
-      alert('Error saving TOE. Please try again.');
+      toast.error('Error saving TOE. Please try again.');
     }
     
     setIsSaving(false);
@@ -519,6 +622,40 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
                   className={showPreReviewVersion ? 'bg-gray-50' : ''}
                 />
               </div>
+
+              {/* Client Name and Site Address Section */}
+              {getSelectedClient() && (
+                <div className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="client_name">Client Name *</Label>
+                      <Input
+                        id="client_name"
+                        value={getSelectedClient().contact_person || ''}
+                        placeholder="Enter client contact name"
+                        readOnly={showPreReviewVersion}
+                        className={showPreReviewVersion ? 'bg-gray-50' : ''}
+                      />
+                      <p className="text-xs text-gray-500">This will be used in the introductory letter salutation</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="site_address">Site Address *</Label>
+                      <Textarea
+                        id="site_address"
+                        value={getSelectedClient().address ? 
+                          `${getSelectedClient().address.street || ''}, ${getSelectedClient().address.city || ''} ${getSelectedClient().address.postcode || ''}`.trim() : 
+                          ''}
+                        placeholder="Enter project site address"
+                        rows={3}
+                        readOnly={showPreReviewVersion}
+                        className={showPreReviewVersion ? 'bg-gray-50' : ''}
+                      />
+                      <p className="text-xs text-gray-500">This will be used in the introductory letter</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {getSelectedClient() && (
                 <Card className="bg-blue-50 border-blue-200">
@@ -872,11 +1009,98 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Review & Finalize</h3>
-                <AIReviewButton 
-                  toeData={showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version : formData} 
-                  client={getSelectedClient()}
-                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={generateProjectSummary}
+                    disabled={isGeneratingSummary || !formData.project_title || !getSelectedClient()}
+                    variant="outline"
+                    className="flex items-center gap-2"
+                  >
+                    {isGeneratingSummary ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-4 h-4" />
+                    )}
+                    {isGeneratingSummary ? 'Generating...' : 'AI Generate Summary'}
+                  </Button>
+                  {/* AI Review button temporarily hidden */}
+                  {/* <AIReviewButton 
+                    toeData={showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version : formData} 
+                    client={getSelectedClient()}
+                  /> */}
+                </div>
               </div>
+
+              {/* Project Summary Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Project Summary for Introductory Letter</CardTitle>
+                      <p className="text-sm text-gray-600">
+                        This summary will be used in the introductory letter sent to the client.
+                      </p>
+                    </div>
+                    {formData.project_summary && (
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => handleInputChange('project_summary', '')}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700"
+                          disabled={showPreReviewVersion}
+                        >
+                          Clear
+                        </Button>
+                        <Button
+                          onClick={generateProjectSummary}
+                          variant="outline"
+                          size="sm"
+                          disabled={isGeneratingSummary || showPreReviewVersion}
+                        >
+                          Regenerate
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="project_summary">Project Summary</Label>
+                      {formData.project_summary && (
+                        <span className="text-xs text-gray-500">
+                          {formData.project_summary.length} characters
+                        </span>
+                      )}
+                    </div>
+                    <Textarea
+                      id="project_summary"
+                      value={formData.project_summary}
+                      onChange={(e) => handleInputChange('project_summary', e.target.value)}
+                      placeholder="Click 'AI Generate Summary' to automatically create a professional project summary, or enter manually..."
+                      rows={8}
+                      readOnly={showPreReviewVersion}
+                      className={`${showPreReviewVersion ? 'bg-gray-50' : ''} resize-y`}
+                    />
+                    {!formData.project_summary && (
+                      <div className="text-sm text-gray-500 italic bg-gray-50 p-3 rounded border">
+                        <p>No project summary provided. This will be required for the introductory letter.</p>
+                        <p className="mt-1">Click "AI Generate Summary" to create one automatically, or type your own summary above.</p>
+                      </div>
+                    )}
+                    {formData.project_summary && (
+                      <div className={`text-xs p-2 rounded border ${
+                        validateProjectSummary().isValid 
+                          ? 'text-green-700 bg-green-50 border-green-200' 
+                          : 'text-red-700 bg-red-50 border-red-200'
+                      }`}>
+                        {validateProjectSummary().message}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
               
               <div className="grid md:grid-cols-2 gap-6">
                 <Card>
@@ -1141,44 +1365,73 @@ Please provide specific, actionable suggestions for:
 
 Format your response as structured suggestions, not as replacement content.`;
 
-      const response = await InvokeLLM({
-        prompt,
-        add_context_from_internet: false,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            scope_suggestions: {
-              type: "array",
-              items: { type: "string" }
-            },
-            assumption_suggestions: {
-              type: "array", 
-              items: { type: "string" }
-            },
-            exclusion_suggestions: {
-              type: "array",
-              items: { type: "string" }
-            },
-            fee_suggestions: {
-              type: "array",
-              items: { type: "string" }
-            },
-            general_suggestions: {
-              type: "array",
-              items: { type: "string" }
-            }
-          }
-        }
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          prompt,
+          model: 'gpt-4o-mini',
+          systemPrompt: 'You are a professional business consultant specializing in reviewing Terms of Engagement documents. Provide structured, actionable suggestions for improvement.'
+        })
       });
 
-      setAiSuggestions(response);
-      setShowReview(true);
+      if (!response.ok) {
+        throw new Error(`API Error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.response) {
+        // Parse the response into structured suggestions
+        const suggestions = parseAIReviewResponse(data.response);
+        setAiSuggestions(suggestions);
+        setShowReview(true);
+      } else {
+        throw new Error(data.error || 'No suggestions generated');
+      }
     } catch (error) {
       console.error('Error generating AI review:', error);
       alert('Error generating AI review. Please try again.');
     }
     
     setIsGenerating(false);
+  };
+
+  // Helper function to parse AI response into structured format
+  const parseAIReviewResponse = (response) => {
+    // Simple parsing - you might want to make this more sophisticated
+    const lines = response.split('\n').filter(line => line.trim());
+    const suggestions = {
+      scope_suggestions: [],
+      assumption_suggestions: [],
+      exclusion_suggestions: [],
+      fee_suggestions: [],
+      general_suggestions: []
+    };
+
+    let currentCategory = 'general_suggestions';
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed.includes('Scope') || trimmed.includes('scope')) {
+        currentCategory = 'scope_suggestions';
+      } else if (trimmed.includes('Assumption') || trimmed.includes('assumption')) {
+        currentCategory = 'assumption_suggestions';
+      } else if (trimmed.includes('Exclusion') || trimmed.includes('exclusion')) {
+        currentCategory = 'exclusion_suggestions';
+      } else if (trimmed.includes('Fee') || trimmed.includes('fee')) {
+        currentCategory = 'fee_suggestions';
+      } else if (trimmed.match(/^\d+\./) || trimmed.startsWith('-') || trimmed.startsWith('•')) {
+        // This looks like a suggestion
+        const cleanSuggestion = trimmed.replace(/^[\d\.\-\•\s]+/, '').trim();
+        if (cleanSuggestion) {
+          suggestions[currentCategory].push(cleanSuggestion);
+        }
+      }
+    });
+
+    return suggestions;
   };
 
   return (

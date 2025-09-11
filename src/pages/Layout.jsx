@@ -23,7 +23,8 @@ import {
   Sparkles,
   BookText,
   DollarSign,
-  Upload
+  Upload,
+  MessageCircle
 } from "lucide-react";
 import {
   Sidebar,
@@ -49,6 +50,7 @@ import { PageLoadingSkeleton } from '@/components/ui/loading-states';
 const allNavigationItems = [
   { title: "Dashboard", url: createPageUrl("Dashboard"), icon: LayoutDashboard },
   { title: "AI Assistant", url: createPageUrl("AIAssistant"), icon: Sparkles },
+  { title: "AI Chat Test", url: createPageUrl("ChatTest"), icon: MessageCircle },
   { title: "CRM Pipeline", url: createPageUrl("CRM"), icon: Users },
   { title: "TOE Manager", url: createPageUrl("TOEManager"), icon: FileText },
   { title: "Projects", url: createPageUrl("Projects"), icon: FolderOpen },

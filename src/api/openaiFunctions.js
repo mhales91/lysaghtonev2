@@ -1,7 +1,7 @@
 // Real OpenAI API functions for localhost development
 // These make actual API calls to OpenAI instead of mock responses
 
-// Removed Bottleneck import - using simple concurrency limiter instead
+import Bottleneck from "bottleneck";
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
 
@@ -231,20 +231,10 @@ async function responsesCreateWithRetries(payload, { maxRetries = 6 } = {}) {
 }
 
 // Simple concurrency limiter (TPM is handled separately)
-let isDeepResearchRunning = false;
-const drLimiter = {
-  schedule: async (fn) => {
-    while (isDeepResearchRunning) {
-      await new Promise(r => setTimeout(r, 100));
-    }
-    isDeepResearchRunning = true;
-    try {
-      return await fn();
-    } finally {
-      isDeepResearchRunning = false;
-    }
-  }
-};
+const drLimiter = new Bottleneck({ 
+  maxConcurrent: 1, // Only 1 Deep Research job at a time
+  minTime: 50 // Minimum 50ms between jobs
+});
 
 function updateEMA(totalTokens) {
   const alpha = 0.25;
