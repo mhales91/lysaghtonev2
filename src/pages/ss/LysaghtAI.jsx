@@ -250,124 +250,156 @@ export default function LysaghtAI() {
   }
 
   async function handleSendMessage(e) {
-    e.preventDefault();
-    if (!inputMessage.trim() || !selectedAssistant) return;
-
-    const userMessage = {
-      id: String(Date.now()),
-      type: 'user',
-      content: inputMessage,
-      timestamp: new Date().toISOString(),
-      files: uploadedFiles.length ? [...uploadedFiles] : undefined
-    };
-
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInputMessage('');
-    const currentFiles = [...uploadedFiles];
-    setUploadedFiles([]);
-    setIsLoading(true);
-
+    console.log('handleSendMessage called');
     try {
-      if (!selectedAssistant.isGeneral) {
-        await AIAssistant.update(selectedAssistant.id, { usage_count: (selectedAssistant.usage_count || 0) + 1 });
-      }
+      e.preventDefault();
+      if (!inputMessage.trim() || !selectedAssistant) return;
 
-      const fileUrls = currentFiles.map(f => f.url);
-      let responseData;
+      const userMessage = {
+        id: String(Date.now()),
+        type: 'user',
+        content: inputMessage,
+        timestamp: new Date().toISOString(),
+        files: uploadedFiles.length ? [...uploadedFiles] : undefined
+      };
 
-      if (selectedAssistant.isGeneral) {
-        const effectiveModel = normalizeModel(selectedModel);
-        const hint = (selectedAssistant.system_prompt || '') +
-          `\n\n[Meta instruction: The active OpenAI model id for this chat is "${effectiveModel}". If the user asks what model you are, answer exactly "${effectiveModel}".]`;
+      const newMessages = [...messages, userMessage];
+      setMessages(newMessages);
+      setInputMessage('');
+      const currentFiles = [...uploadedFiles];
+      setUploadedFiles([]);
+      setIsLoading(true);
 
-        const apiResponse = await realOpenaiAdvanced({
-          prompt: userMessage.content,
-          model: effectiveModel,
-          action: actionType,
-          systemPrompt: hint,
-          history: messages,
-          fileUrls: fileUrls.length ? fileUrls : undefined
-        });
-        responseData = apiResponse;
-      } else {
-        const safeAssistant = {
-          ...selectedAssistant,
-          model: normalizeModel(selectedAssistant.model || 'gpt-4o')
+      try {
+        if (!selectedAssistant.isGeneral) {
+          await AIAssistant.update(selectedAssistant.id, { usage_count: (selectedAssistant.usage_count || 0) + 1 });
+        }
+
+        const fileUrls = currentFiles.map(f => f.url);
+        let responseData;
+
+        if (selectedAssistant.isGeneral) {
+          const effectiveModel = normalizeModel(selectedModel);
+          const hint = (selectedAssistant.system_prompt || '') +
+            `\n\n[Meta instruction: The active OpenAI model id for this chat is "${effectiveModel}". If the user asks what model you are, answer exactly "${effectiveModel}".]`;
+
+          const apiResponse = await realOpenaiAdvanced({
+            prompt: userMessage.content,
+            model: effectiveModel,
+            action: actionType,
+            systemPrompt: hint,
+            history: messages,
+            fileUrls: fileUrls.length ? fileUrls : undefined
+          });
+          responseData = apiResponse;
+        } else {
+          const safeAssistant = {
+            ...selectedAssistant,
+            model: normalizeModel(selectedAssistant.model || 'gpt-4o')
+          };
+
+          const useRetrieval =
+            !!safeAssistant.file_search_enabled &&
+            typeof safeAssistant.vector_store_id === 'string' &&
+            safeAssistant.vector_store_id.startsWith('vs_');
+
+          let apiResponse;
+          if (useRetrieval) {
+            apiResponse = await realChatWithRetrieval({
+              message: userMessage.content,
+              history: messages,
+              assistantConfig: {
+                model: safeAssistant.model,
+                system_prompt: safeAssistant.system_prompt || '',
+                vector_store_id: safeAssistant.vector_store_id
+              },
+              fileUrls: fileUrls.length ? fileUrls : undefined
+            });
+          } else {
+            apiResponse = await realChatStandard({
+              message: userMessage.content,
+              history: messages,
+              assistantConfig: safeAssistant,
+              fileUrls: fileUrls.length ? fileUrls : undefined
+            });
+          }
+          responseData = apiResponse;
+        }
+
+        if (!responseData || !responseData.success) {
+          const details = responseData && responseData.details ? ` Details: ${JSON.stringify(responseData.details)}` : '';
+          throw new Error((responseData && responseData.error) ? responseData.error + details : 'Failed to get AI response');
+        }
+
+        const used = responseData.model_used ||
+          (selectedAssistant.isGeneral ? normalizeModel(selectedModel) : normalizeModel(selectedAssistant.model || 'gpt-4o'));
+
+        const aiMessage = {
+          id: String(Date.now() + 1),
+          type: 'assistant',
+          content: responseData.reply || responseData.response,
+          timestamp: new Date().toISOString(),
+          model_used: used,
+          usage: responseData.usage,
+          action_type: responseData.type,
+          image_url: responseData.image_url,
+          tool_calls: responseData.tool_calls || []
         };
 
-        const useRetrieval =
-          !!safeAssistant.file_search_enabled &&
-          typeof safeAssistant.vector_store_id === 'string' &&
-          safeAssistant.vector_store_id.startsWith('vs_');
+        setLastModelId(used);
 
-        let apiResponse;
-        if (useRetrieval) {
-          apiResponse = await realChatWithRetrieval({
-            message: userMessage.content,
-            history: messages,
-            assistantConfig: {
-              model: safeAssistant.model,
-              system_prompt: safeAssistant.system_prompt || '',
-              vector_store_id: safeAssistant.vector_store_id
-            },
-            fileUrls: fileUrls.length ? fileUrls : undefined
-          });
+        const finalMessages = [...newMessages, aiMessage];
+        setMessages(finalMessages);
+
+        const conversationData = {
+          created_by: (currentUser && currentUser.email) ? currentUser.email : '',
+          assistant_id: selectedAssistant.isGeneral ? null : selectedAssistant.id,
+          messages: finalMessages,
+          last_message_at: new Date().toISOString(),
+          message_count: finalMessages.length
+        };
+
+        if (currentConversation) {
+          await ChatConversation.update(currentConversation.id, conversationData);
         } else {
-          apiResponse = await realChatStandard({
-            message: userMessage.content,
-            history: messages,
-            assistantConfig: safeAssistant,
-            fileUrls: fileUrls.length ? fileUrls : undefined
-          });
+          const conversationTitle = generateConversationTitle(userMessage.content);
+          const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
+          setCurrentConversation(newConversation);
+          const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
+          const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
+          setConversations(convos);
         }
-        responseData = apiResponse;
-      }
-
-      if (!responseData || !responseData.success) {
-        const details = responseData && responseData.details ? ` Details: ${JSON.stringify(responseData.details)}` : '';
-        throw new Error((responseData && responseData.error) ? responseData.error + details : 'Failed to get AI response');
-      }
-
-      const used = responseData.model_used ||
-        (selectedAssistant.isGeneral ? normalizeModel(selectedModel) : normalizeModel(selectedAssistant.model || 'gpt-4o'));
-
-      const aiMessage = {
-        id: String(Date.now() + 1),
-        type: 'assistant',
-        content: responseData.reply || responseData.response,
-        timestamp: new Date().toISOString(),
-        model_used: used,
-        usage: responseData.usage,
-        action_type: responseData.type,
-        image_url: responseData.image_url,
-        tool_calls: responseData.tool_calls || []
-      };
-
-      setLastModelId(used);
-
-      const finalMessages = [...newMessages, aiMessage];
-      setMessages(finalMessages);
-
-      const conversationData = {
-        created_by: (currentUser && currentUser.email) ? currentUser.email : '',
-        assistant_id: selectedAssistant.isGeneral ? null : selectedAssistant.id,
-        messages: finalMessages,
-        last_message_at: new Date().toISOString(),
-        message_count: finalMessages.length
-      };
-
-      if (currentConversation) {
-        await ChatConversation.update(currentConversation.id, conversationData);
-      } else {
-        const conversationTitle = generateConversationTitle(userMessage.content);
-        const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
-        setCurrentConversation(newConversation);
-        const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
-        const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
-        setConversations(convos);
+      } catch (err) {
+        console.error('Error in handleSendMessage:', {
+          message: err.message,
+          stack: err.stack,
+          name: err.name,
+          cause: err.cause,
+          // Add more debugging info
+          errorString: err.toString(),
+          constructor: err.constructor.name
+        });
+        const errorMessage = {
+          id: String(Date.now() + 1),
+          type: 'error',
+          content: `Sorry, I encountered an error: ${err.message}. Please try again.`,
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, errorMessage]);
+        toast({ title: 'Error', description: `Failed to get response from AI: ${err.message}`, variant: 'destructive' });
+      } finally {
+        setIsLoading(false);
       }
     } catch (err) {
+      console.error('Error in handleSendMessage:', {
+        message: err.message,
+        stack: err.stack,
+        name: err.name,
+        cause: err.cause,
+        // Add more debugging info
+        errorString: err.toString(),
+        constructor: err.constructor.name
+      });
       const errorMessage = {
         id: String(Date.now() + 1),
         type: 'error',
@@ -376,8 +408,6 @@ export default function LysaghtAI() {
       };
       setMessages(prev => [...prev, errorMessage]);
       toast({ title: 'Error', description: `Failed to get response from AI: ${err.message}`, variant: 'destructive' });
-    } finally {
-      setIsLoading(false);
     }
   }
 
