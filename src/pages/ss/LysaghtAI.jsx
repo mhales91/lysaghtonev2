@@ -283,14 +283,12 @@ export default function LysaghtAI() {
           const hint = (selectedAssistant.system_prompt || '') +
             `\n\n[Meta instruction: The active OpenAI model id for this chat is "${effectiveModel}". If the user asks what model you are, answer exactly "${effectiveModel}".]`;
 
-          const apiResponse = await realOpenaiAdvanced({
-            prompt: userMessage.content,
-            model: effectiveModel,
-            action: actionType,
-            systemPrompt: hint,
-            history: messages,
-            fileUrls: fileUrls.length ? fileUrls : undefined
-          });
+          const apiResponse = {
+            success: true,
+            response: 'Test response - AI functions temporarily disabled for debugging',
+            reply: 'Test response - AI functions temporarily disabled for debugging',
+            model_used: 'test-model'
+          };
           responseData = apiResponse;
         } else {
           const safeAssistant = {
