@@ -3,15 +3,16 @@ import { Task, Project, User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Plus, Filter } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUser } from '@/contexts/UserContext';
 
 import TaskBoard from "../components/tasks/TaskBoard";
 import TaskList from "../components/tasks/TaskList";
 import TaskForm from "../components/tasks/TaskForm";
 
 export default function TasksPage() {
+  const { currentUser } = useUser();
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [filters, setFilters] = useState({
@@ -23,18 +24,21 @@ export default function TasksPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentUser]);
 
   const loadData = async () => {
+    if (!currentUser) {
+      console.log('No user in context yet, waiting...');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const [user, taskData, projectData] = await Promise.all([
-        User.me(),
+      const [taskData, projectData] = await Promise.all([
         Task.list('-created_date'),
         Project.list()
       ]);
       
-      setCurrentUser(user);
       setTasks(taskData);
       setProjects(projectData);
     } catch (error) {

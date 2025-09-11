@@ -4,43 +4,33 @@ import { TimeEntry, Project, Task, User, Client } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Save, ChevronsUpDown } from "lucide-react";
 import { format, startOfWeek, endOfWeek } from 'date-fns';
+import { useUser } from '@/contexts/UserContext';
 
 import WeeklyTimesheetGrid from "../components/timesheets/WeeklyTimesheetGrid";
 
 export default function Timesheets() {
+  const { currentUser } = useUser();
   const [timeEntries, setTimeEntries] = useState([]);
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [clients, setClients] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [selectedWeek, setSelectedWeek] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false); // Add saving state to prevent race conditions
 
   useEffect(() => {
     loadData();
-  }, [selectedWeek]);
+  }, [selectedWeek, currentUser]);
 
   const loadData = async () => {
+    if (!currentUser) {
+      console.log('No user in context yet, waiting...');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Check if we're on localhost and have a localStorage user
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      let user;
-      
-      if (isLocalhost) {
-        const localUser = localStorage.getItem('currentUser');
-        if (localUser) {
-          user = JSON.parse(localUser);
-        } else {
-          // Fallback to Supabase authentication for database users
-          user = await User.me();
-        }
-      } else {
-        // Production: Use Supabase authentication
-        user = await User.me();
-      }
-      setCurrentUser(user);
+      const user = currentUser;
 
       const weekStart = format(startOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');
       const weekEnd = format(endOfWeek(selectedWeek, { weekStartsOn: 1 }), 'yyyy-MM-dd');

@@ -44,18 +44,16 @@ export default function Dashboard() {
   // Load user data
   useEffect(() => {
     const loadUser = async () => {
-      try {
-        const user = await User.me();
-        setCurrentUser(user);
-      } catch (error) {
-        console.error('Error loading user:', error);
-      } finally {
-        setIsLoading(false);
+      if (!currentUser) {
+        console.log('No user in context yet, waiting...');
+        return;
       }
+      setCurrentUser(currentUser);
+      setIsLoading(false);
     };
 
     loadUser();
-  }, []);
+  }, [currentUser]);
 
   // Load dashboard settings
   useEffect(() => {

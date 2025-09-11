@@ -148,67 +148,9 @@ const ProtectedLayout = ({ children, currentPageName }) => {
         console.log("Full error details:", e);
         console.log("Error stack:", e.stack);
         
-        // Check if we're on localhost and can use fallback user data
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        
-        // If it's a database role error, authentication error, or we're on localhost, try fallback
-        if (e.message && (
-          e.message.includes('role "" does not exist') ||
-          e.message.includes('Not authenticated') ||
-          e.message.includes('Auth session missing') ||
-          isLocalhost
-        )) {
-          console.log("🔄 Authentication/database error detected, using fallback user data...");
-          
-          // Try to get auth user first
-          let authUser = null;
-          try {
-            const { data: { user } } = await supabase.auth.getUser();
-            authUser = user;
-          } catch (authError) {
-            console.log("Could not get auth user, using default fallback:", authError.message);
-          }
-          
-          // Create fallback user data
-          const fallbackUser = {
-            id: authUser?.id || 'fallback-user-id',
-            email: authUser?.email || 'mitchell@lysaght.net.nz',
-            user_role: 'Admin', // Default to Admin for now
-            approval_status: 'approved',
-            first_name: 'User',
-            last_name: 'User',
-            full_name: 'User User'
-          };
-          
-          console.log("Using fallback user:", fallbackUser);
-          setCurrentUser(fallbackUser);
-          
-          // Set fallback permissions immediately
-          const defaultPermissions = {
-            'Admin': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings', 'User Management', 'AI Assistant Manager', 'Billing Settings', 'Analytics Settings', 'Prompt Library', 'TOE Admin', 'Import Jobs'],
-            'Director': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings', 'User Management', 'AI Assistant Manager', 'Billing Settings', 'Analytics Settings', 'Prompt Library', 'TOE Admin', 'Import Jobs'],
-            'Manager': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics', 'Task Templates', 'Company Settings'],
-            'Staff': ['Dashboard', 'AI Assistant', 'CRM Pipeline', 'TOE Manager', 'Projects', 'Timesheets', 'Lysaght AI', 'Billing', 'Analytics'],
-            'Client': ['Dashboard', 'Projects', 'Timesheets', 'Billing']
-          };
-          
-          localStorage.setItem('roleConfigs', JSON.stringify(defaultPermissions));
-          console.log("✅ Fallback permissions set in localStorage");
-          
-          // Set up navigation with fallback permissions
-          const { navItems, adminItems } = filterNavigationItems('Admin');
-          setVisibleNavItems(navItems);
-          setVisibleAdminItems(adminItems);
-          
-          setIsAuthLoading(false);
-          return;
-        }
-        
-        // Add a delay before redirecting to allow console inspection
-        console.log("Will redirect to login in 5 seconds...");
-        setTimeout(() => {
-          window.location.href = '/login';
-        }, 5000);
+        // Redirect to login on authentication error
+        console.log("Redirecting to login...");
+        window.location.href = '/login';
         return;
       } finally {
         setIsAuthLoading(false);

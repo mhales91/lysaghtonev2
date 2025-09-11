@@ -7,11 +7,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import MessageBubble from '@/components/agent/MessageBubble';
 import { Send, Plus, MessageSquare, Trash2, Bot, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useUser } from '@/contexts/UserContext';
 
 const AGENT_NAME = "lysaght_assistant";
 
 export default function AgentPage() {
-    const [currentUser, setCurrentUser] = useState(null);
+    const { currentUser } = useUser();
     const [conversations, setConversations] = useState([]);
     const [currentConversation, setCurrentConversation] = useState(null);
     const [messages, setMessages] = useState([]);
@@ -20,13 +21,15 @@ export default function AgentPage() {
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const scrollAreaRef = useRef(null);
 
-    // Load user and conversations on mount
+    // Load conversations on mount
     useEffect(() => {
         const initializeAgent = async () => {
+            if (!currentUser) {
+                console.log('No user in context yet, waiting...');
+                return;
+            }
+
             try {
-                const user = await User.me();
-                setCurrentUser(user);
-                
                 // Load conversations for this agent
                 const convos = await agentSDK.listConversations({ agent_name: AGENT_NAME });
                 setConversations(convos || []);
@@ -40,7 +43,7 @@ export default function AgentPage() {
         };
 
         initializeAgent();
-    }, []);
+    }, [currentUser]);
 
     // Subscribe to conversation updates
     useEffect(() => {

@@ -28,9 +28,13 @@ import ProjectPortfolio from "../components/dashboard/widgets/ProjectPortfolio";
 import UpcomingProjects from "../components/dashboard/widgets/UpcomingProjects";
 import BudgetWidget from "../components/dashboard/widgets/BudgetWidget";
 import { getNZFinancialYear } from '../components/utils/dateUtils';
+import { useUser } from '@/contexts/UserContext';
 
 
 export default function Dashboard() {
+  // Get user from context instead of calling User.me()
+  const { currentUser } = useUser();
+  
   const [loggedInUser, setLoggedInUser] = useState(null);
   const [viewLevel, setViewLevel] = useState('staff');
   const [allUsers, setAllUsers] = useState([]);
@@ -50,29 +54,16 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    // Load static, non-date-dependent data on initial mount
     const loadStaticData = async () => {
-      // setIsLoading(true); // Already true by default
       try {
-        // Check if we're on localhost and have a localStorage user
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        let user;
-        
-        if (isLocalhost) {
-          const localUser = localStorage.getItem('currentUser');
-          if (localUser) {
-            user = JSON.parse(localUser);
-            setLoggedInUser(user);
-          } else {
-            // Fallback to Supabase authentication for database users
-            user = await User.me();
-            setLoggedInUser(user);
-          }
-        } else {
-          // Production: Use Supabase authentication
-          user = await User.me();
-          setLoggedInUser(user);
+        // Use the user from context instead of calling User.me()
+        if (!currentUser) {
+          console.log('No user in context yet, waiting...');
+          return;
         }
+        
+        const user = currentUser;
+        setLoggedInUser(user);
         
         // Set default view level based on role
         const defaultLevel = user.user_role === 'Director' || user.user_role === 'Admin' ? 'director' :
@@ -81,12 +72,12 @@ export default function Dashboard() {
 
         const currentFY = getNZFinancialYear(new Date()).startDate.getFullYear();
 
-        // Load static data concurrently, filtering for active items only to improve performance
+        // Load static data concurrently
         const [users, projectsData, clientsData, toesData, settingsList, analyticsSettingsList] = await Promise.all([
           User.list(),
-          Project.filter({ status: { $ne: 'archived' } }, '-created_date'), // Only fetch non-archived projects
-          Client.list(), // Keep fetching all clients as they are needed for project context
-          TOE.filter({ status: { $ne: 'signed' } }, '-created_date'), // Only fetch non-signed TOEs
+          Project.filter({ status: { $ne: 'archived' } }, '-created_date'),
+          Client.list(),
+          TOE.filter({ status: { $ne: 'signed' } }, '-created_date'),
           DashboardSettings.list(),
           AnalyticsSetting.filter({ year: currentFY })
         ]);
@@ -100,17 +91,15 @@ export default function Dashboard() {
 
         const depts = [...new Set(users.map(u => u.department).filter(Boolean))];
         setAllDepartments(depts);
-
+        
       } catch (error) {
         console.error('Error loading static dashboard data:', error);
-        setIsLoading(false); // If static data fails, stop loading
+        setIsLoading(false);
       }
-      // Note: isLoading is NOT set to false here. It will be handled by the time-sensitive loader
-      // once loggedInUser is set and time-sensitive data is fetched. This ensures spinner until all initial data is ready.
     };
-    
+
     loadStaticData();
-  }, []); // Empty dependency array means this runs only once on component mount
+  }, [currentUser]); // Add currentUser as dependency
 
   useEffect(() => {
     // Load time-sensitive data when date range changes or after loggedInUser is set by the static load

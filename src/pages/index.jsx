@@ -1,23 +1,29 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
-import Layout from "./Layout";
-import Dashboard from "./Dashboard";
-import Projects from "./Projects";
-import ProjectDetail from "./ProjectDetail";
-import Tasks from "./Tasks";
-import Timesheets from "./Timesheets";
-import Billing from "./Billing";
-import CRM from "./CRM";
-import Analytics from "./Analytics";
+import Layout from "./Layout.jsx";
 import Login from "./Login";
+
+import Dashboard from "./Dashboard";
+
+import CRM from "./CRM";
+
+import Timesheets from "./Timesheets";
+
+import Projects from "./Projects";
+
+import Billing from "./Billing";
+
+import Tasks from "./Tasks";
+
+import TOESign from "./TOESign";
+
 import Admin from "./Admin";
-import JobsImport from "./JobsImport";
+
 import TaskTemplates from "./TaskTemplates";
 
 import AdminSettings from "./AdminSettings";
 
 import UserManagement from "./UserManagement";
 
-import LysaghtAI from "./ss/LysaghtAI-minimal";
+import LysaghtAI from "./LysaghtAI";
 
 import AIAssistantManager from "./AIAssistantManager";
 
@@ -27,123 +33,165 @@ import BillingAdmin from "./BillingAdmin";
 
 import TOEAdmin from "./TOEAdmin";
 
-import TOEManager from "./TOEManager";
+import JobsImport from "./JobsImport";
 
-import TOESign from "./TOESign";
-
-import DashboardSettings from "./DashboardSettings";
+import Analytics from "./Analytics";
 
 import AnalyticsSettings from "./AnalyticsSettings";
 
-import { UserProvider } from "../contexts/UserContext";
+import ProjectDetail from "./ProjectDetail";
 
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: (
-      <UserProvider>
-        <Layout />
-      </UserProvider>
-    ),
-    children: [
-      {
-        index: true,
-        element: <Dashboard />
-      },
-      {
-        path: "projects",
-        element: <Projects />
-      },
-      {
-        path: "projects/:id",
-        element: <ProjectDetail />
-      },
-      {
-        path: "tasks",
-        element: <Tasks />
-      },
-      {
-        path: "timesheets",
-        element: <Timesheets />
-      },
-      {
-        path: "billing",
-        element: <Billing />
-      },
-      {
-        path: "crm",
-        element: <CRM />
-      },
-      {
-        path: "analytics",
-        element: <Analytics />
-      },
-      {
-        path: "admin",
-        element: <Admin />
-      },
-      {
-        path: "jobs-import",
-        element: <JobsImport />
-      },
-      {
-        path: "task-templates",
-        element: <TaskTemplates />
-      },
-      {
-        path: "admin-settings",
-        element: <AdminSettings />
-      },
-      {
-        path: "user-management",
-        element: <UserManagement />
-      },
-      {
-        path: "LysaghtAI",
-        element: <LysaghtAI />
-      },
-      {
-        path: "ai-assistant-manager",
-        element: <AIAssistantManager />
-      },
-      {
-        path: "prompt-library-manager",
-        element: <PromptLibraryManager />
-      },
-      {
-        path: "billing-admin",
-        element: <BillingAdmin />
-      },
-      {
-        path: "toe-admin",
-        element: <TOEAdmin />
-      },
-      {
-        path: "toe-manager",
-        element: <TOEManager />
-      },
-      {
-        path: "toe-sign",
-        element: <TOESign />
-      },
-      {
-        path: "dashboard-settings",
-        element: <DashboardSettings />
-      },
-      {
-        path: "analytics-settings",
-        element: <AnalyticsSettings />
-      }
-    ]
-  },
-  {
-    path: "/login",
-    element: <Login />
-  }
-]);
+import TOEManager from "./TOEManager";
 
-function App() {
-  return <RouterProvider router={router} />;
+import DashboardSettings from "./DashboardSettings";
+
+import Agent from "./Agent";
+
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+
+const PAGES = {
+    
+    Dashboard: Dashboard,
+    
+    CRM: CRM,
+    
+    Timesheets: Timesheets,
+    
+    Projects: Projects,
+    
+    Billing: Billing,
+    
+    Tasks: Tasks,
+    
+    TOESign: TOESign,
+    
+    Admin: Admin,
+    
+    TaskTemplates: TaskTemplates,
+    
+    AdminSettings: AdminSettings,
+    
+    UserManagement: UserManagement,
+    
+    LysaghtAI: LysaghtAI,
+    
+    AIAssistantManager: AIAssistantManager,
+    
+    PromptLibraryManager: PromptLibraryManager,
+    
+    BillingAdmin: BillingAdmin,
+    
+    TOEAdmin: TOEAdmin,
+    
+    JobsImport: JobsImport,
+    
+    Analytics: Analytics,
+    
+    AnalyticsSettings: AnalyticsSettings,
+    
+    ProjectDetail: ProjectDetail,
+    
+    TOEManager: TOEManager,
+    
+    DashboardSettings: DashboardSettings,
+    
+    Agent: Agent,
+    
 }
 
-export default App;
+function _getCurrentPage(url) {
+    if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+    let urlLastPart = url.split('/').pop();
+    if (urlLastPart.includes('?')) {
+        urlLastPart = urlLastPart.split('?')[0];
+    }
+
+    // Handle special case for aiassistant -> AIAssistantManager
+    if (urlLastPart.toLowerCase() === 'aiassistant') {
+        return 'AIAssistantManager';
+    }
+
+    const pageName = Object.keys(PAGES).find(page => page.toLowerCase() === urlLastPart.toLowerCase());
+    return pageName || Object.keys(PAGES)[0];
+}
+
+// Create a wrapper component that uses useLocation inside the Router context
+function PagesContent() {
+    const location = useLocation();
+    const currentPage = _getCurrentPage(location.pathname);
+    
+    return (
+        <Routes>            
+            {/* Public routes that don't require authentication */}
+            <Route path="/login" element={<Login />} />
+            
+            {/* Protected routes that require authentication */}
+            <Route path="/*" element={
+                <Layout currentPageName={currentPage}>
+                    <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                
+                
+                <Route path="/Dashboard" element={<Dashboard />} />
+                
+                <Route path="/CRM" element={<CRM />} />
+                
+                <Route path="/Timesheets" element={<Timesheets />} />
+                
+                <Route path="/Projects" element={<Projects />} />
+                
+                <Route path="/Billing" element={<Billing />} />
+                
+                <Route path="/Tasks" element={<Tasks />} />
+                
+                <Route path="/TOESign" element={<TOESign />} />
+                
+                <Route path="/Admin" element={<Admin />} />
+                
+                <Route path="/TaskTemplates" element={<TaskTemplates />} />
+                
+                <Route path="/AdminSettings" element={<AdminSettings />} />
+                
+                <Route path="/UserManagement" element={<UserManagement />} />
+                
+                <Route path="/LysaghtAI" element={<LysaghtAI />} />
+                
+                <Route path="/AIAssistantManager" element={<AIAssistantManager />} />
+                
+                <Route path="/aiassistant" element={<AIAssistantManager />} />
+                
+                <Route path="/PromptLibraryManager" element={<PromptLibraryManager />} />
+                
+                <Route path="/BillingAdmin" element={<BillingAdmin />} />
+                
+                <Route path="/TOEAdmin" element={<TOEAdmin />} />
+                
+                <Route path="/JobsImport" element={<JobsImport />} />
+                
+                <Route path="/Analytics" element={<Analytics />} />
+                
+                <Route path="/AnalyticsSettings" element={<AnalyticsSettings />} />
+                
+                <Route path="/ProjectDetail" element={<ProjectDetail />} />
+                
+                <Route path="/TOEManager" element={<TOEManager />} />
+                
+                <Route path="/DashboardSettings" element={<DashboardSettings />} />
+                
+                <Route path="/Agent" element={<Agent />} />
+                    </Routes>
+                </Layout>
+            } />
+        </Routes>
+    );
+}
+
+export default function Pages() {
+    return (
+        <Router>
+            <PagesContent />
+        </Router>
+    );
+}

@@ -9,8 +9,10 @@ import { addDays, format } from "date-fns";
 import PipelineBoard from "../components/crm/PipelineBoard";
 import ClientForm from "../components/crm/ClientForm";
 import { useLocation } from "react-router-dom";
+import { useUser } from '@/contexts/UserContext';
 
 export default function CRM() {
+  const { currentUser } = useUser();
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]);
   const [filteredClients, setFilteredClients] = useState([]);
@@ -41,39 +43,28 @@ export default function CRM() {
   }, [clients, searchTerm]);
 
   const loadData = async () => {
-    setIsLoading(true);
-    try {
-      // Check if we're on localhost and have a localStorage user
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      let me;
-      
-      if (isLocalhost) {
-        const localUser = localStorage.getItem('currentUser');
-        if (localUser) {
-          me = JSON.parse(localUser);
-        } else {
-          // Fallback to Supabase authentication for database users
-          me = await User.me();
-        }
-      } else {
-        // Production: Use Supabase authentication
-        me = await User.me();
-      }
-      
-      const clientData = await Client.list('-created_date');
-      setClients(clientData);
+    if (!currentUser) {
+      console.log('No user in context yet, waiting...');
+      return;
+    }
 
-      const canViewUserList = ['Manager', 'DeptLead', 'Director', 'Admin'].includes(me.user_role);
+    try {
+      setIsLoading(true);
+      const clientData = await Client.list('-created_date');
+      setClients(clientData || []);
+
+      const canViewUserList = ['Manager', 'DeptLead', 'Director', 'Admin'].includes(currentUser.user_role);
       if (canViewUserList) {
         const userData = await User.list();
         setUsers(userData);
       } else {
         setUsers([]);
       }
-    } catch(e) {
-      console.error("Failed to load CRM data", e);
+    } catch (error) {
+      console.error("Failed to load CRM data", error);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const handleSaveClient = async (clientData) => {

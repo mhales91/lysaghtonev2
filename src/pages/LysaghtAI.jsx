@@ -3,15 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AIAssistant, ChatConversation, User } from '@/api/entitiesDirect';
+import { AIAssistant, ChatConversation, User } from '@/api/entities';
 import { useUser } from '@/contexts/UserContext';
-// Remove problematic imports that cause 'rt' error on Vercel
+import { openaiAdvanced, openaiChat } from '@/api/functions';
+import { chatWithRetrieval } from '@/api/functions/chatWithRetrieval';
+import { chatStandard } from '@/api/functions/chatStandard';
 import { 
   openaiAdvanced as realOpenaiAdvanced, 
   openaiChat as realOpenaiChat, 
   chatWithRetrieval as realChatWithRetrieval, 
   chatStandard as realChatStandard 
-} from '@/api/aiFunctionsSimple';
+} from '@/api/openaiFunctions';
 
 // Helper function to check if model is a deep research model
 function isDeepResearchModel(model) {
@@ -645,7 +647,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
             })
           });
         } else {
-          apiResponse = await realOpenaiAdvanced({
+          apiResponse = await openaiAdvanced({
             prompt: userMessage.content,
             model: effectiveModel,
             action: 'deep_research',
@@ -692,7 +694,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await realChatWithRetrieval({
+            apiResponse = await chatWithRetrieval({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: {
@@ -703,7 +705,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await realChatStandard({
+            apiResponse = await chatStandard({
               message: userMessage.content,
               history: newMessages.slice(0, -1),
               assistantConfig: safeAssistant,
@@ -913,7 +915,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           console.log('apiResponse from realOpenaiAdvanced:', apiResponse);
           console.log('Model used in deep research API response:', apiResponse?.model_used);
         } else {
-          apiResponse = await realOpenaiAdvanced({
+          apiResponse = await openaiAdvanced({
             prompt: userMessage.content,
             model: effectiveModel,
             action: actionType,
@@ -959,7 +961,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
           }
         } else {
           if (useRetrieval) {
-            apiResponse = await realChatWithRetrieval({
+            apiResponse = await chatWithRetrieval({
               message: userMessage.content,
               history: messages,
               assistantConfig: {
@@ -970,7 +972,7 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
               fileUrls: fileUrls.length ? fileUrls : undefined
             });
           } else {
-            apiResponse = await realChatStandard({
+            apiResponse = await chatStandard({
               message: userMessage.content,
               history: messages,
               assistantConfig: safeAssistant,
@@ -1063,13 +1065,6 @@ Make questions relevant to the topic and helpful for comprehensive research. Mix
         setConversations(updatedConversations);
       }
     } catch (err) {
-      console.error('Detailed error in handleSendMessage:', {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-        cause: err.cause
-      });
-      
       const errorMessage = {
         id: String(Date.now() + 1),
         type: 'error',

@@ -14,8 +14,10 @@ import ProjectForm from "../components/projects/ProjectForm";
 import BulkActionsBar from "../components/projects/BulkActionsBar";
 import ProjectPagination from "../components/projects/ProjectPagination";
 import { handleApiError, handleSuccess, handleWarning, handleInfo } from "@/components/utils/errorHandler";
+import { useUser } from '@/contexts/UserContext';
 
 export default function ProjectsPage() {
+  const { currentUser } = useUser();
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [users, setUsers] = useState([]);
@@ -36,50 +38,39 @@ export default function ProjectsPage() {
   const [sortConfig, setSortConfig] = useState({ key: 'job_number', direction: 'desc' });
 
   useEffect(() => {
-    loadData();
-  }, []);
+    const loadData = async () => {
+      if (!currentUser) {
+        console.log('No user in context yet, waiting...');
+        return;
+      }
 
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      // Check if we're on localhost and have a localStorage user
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      let me;
-      
-      if (isLocalhost) {
-        const localUser = localStorage.getItem('currentUser');
-        if (localUser) {
-          me = JSON.parse(localUser);
+      try {
+        setIsLoading(true);
+        
+        const [projectData, clientData, taskData] = await Promise.all([
+          Project.list('-created_date'),
+          Client.list(),
+          Task.list()
+        ]);
+        setProjects(projectData);
+        setClients(clientData);
+        setTasks(taskData);
+        
+        const canViewUserList = ['Manager', 'DeptLead', 'Director', 'Admin'].includes(currentUser.user_role);
+        if (canViewUserList) {
+          const userData = await User.list();
+          setUsers(userData);
         } else {
-          // Fallback to Supabase authentication for database users
-          me = await User.me();
+          setUsers([]);
         }
-      } else {
-        // Production: Use Supabase authentication
-        me = await User.me();
+      } catch (e) {
+        handleApiError(e, 'Loading projects data');
       }
-      
-      const [projectData, clientData, taskData] = await Promise.all([
-        Project.list('-created_date'),
-        Client.list(),
-        Task.list()
-      ]);
-      setProjects(projectData);
-      setClients(clientData);
-      setTasks(taskData);
-      
-      const canViewUserList = ['Manager', 'DeptLead', 'Director', 'Admin'].includes(me.user_role);
-      if (canViewUserList) {
-        const userData = await User.list();
-        setUsers(userData);
-      } else {
-        setUsers([]);
-      }
-    } catch (e) {
-      handleApiError(e, 'Loading projects data');
-    }
-    setIsLoading(false);
-  };
+      setIsLoading(false);
+    };
+
+    loadData();
+  }, [currentUser]);
 
   // Separate active and archived projects
   const { activeProjects, archivedProjects } = useMemo(() => {

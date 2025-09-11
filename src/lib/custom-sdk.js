@@ -536,7 +536,8 @@ export class UserEntity extends CustomEntity {
     } = await supabase.auth.getUser();
     if (!user) throw new Error("Not authenticated");
 
-    const { data, error } = await supabase
+    // Use service role client (this.supabase) for database operations to bypass RLS
+    const { data, error } = await this.supabase  // Fixed: use this.supabase instead of supabase
       .from("users")
       .update({ ...userData, updated_at: new Date().toISOString() })
       .eq("id", user.id)

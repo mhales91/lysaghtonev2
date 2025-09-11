@@ -7,6 +7,7 @@ import { Plus, List, ShieldQuestion } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
 import { Badge } from "@/components/ui/badge";
+import { useUser } from '@/contexts/UserContext';
 
 import TOEList from "../components/toe/TOEList";
 import TOEWizard from "../components/toe/TOEWizard";
@@ -19,11 +20,11 @@ import { generateTOEPDF } from '@/api/functions';
 import { useLocation } from "react-router-dom";
 
 export default function TOEManager() {
+  const { currentUser } = useUser();
   const [toes, setToes] = useState([]);
   const [clients, setClients] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [users, setUsers] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
 
   const [showWizard, setShowWizard] = useState(false);
   const [editingTOE, setEditingTOE] = useState(null);
@@ -42,7 +43,7 @@ export default function TOEManager() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentUser]);
   
   useEffect(() => {
     const handleUrlParams = async () => {
@@ -60,24 +61,14 @@ export default function TOEManager() {
   }, [location.search, toes]);
 
   const loadData = async () => {
+    if (!currentUser) {
+      console.log('No user in context yet, waiting...');
+      return;
+    }
+
     setIsLoading(true);
     
-    // Check if we're on localhost and have a localStorage user
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    let me;
-    
-    if (isLocalhost) {
-      const localUser = localStorage.getItem('currentUser');
-      if (localUser) {
-        me = JSON.parse(localUser);
-      } else {
-        // Fallback to Supabase authentication for database users
-        me = await User.me();
-      }
-    } else {
-      // Production: Use Supabase authentication
-      me = await User.me();
-    }
+    const me = currentUser;
     
     const [toeData, clientData, reviewData, userData] = await Promise.all([
       TOE.list('-created_date'),
@@ -89,7 +80,6 @@ export default function TOEManager() {
     setClients(clientData);
     setReviews(reviewData);
     setUsers(userData);
-    setCurrentUser(me);
     setIsLoading(false);
   };
   

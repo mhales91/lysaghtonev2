@@ -4,6 +4,7 @@ import { Invoice, TimeEntry, Project, Client, User } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Plus, Receipt, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useUser } from '@/contexts/UserContext';
 
 import InvoiceList from "../components/billing/InvoiceList";
 import TaskBasedInvoiceForm from "../components/billing/TaskBasedInvoiceForm";
@@ -12,11 +13,11 @@ import CostTracker from "../components/billing/CostTracker";
 import DraftInvoices from "../components/billing/DraftInvoices"; // New import for DraftInvoices component
 
 export default function BillingPage() {
+  const { currentUser } = useUser();
   const [invoices, setInvoices] = useState([]);
   const [timeEntries, setTimeEntries] = useState([]);
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
-  const [currentUser, setCurrentUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -42,20 +43,24 @@ export default function BillingPage() {
 
     // The previous window.addEventListener('message') for Xero connection is replaced by URL param check.
     // So, no need for handleXeroMessage and its cleanup here.
-  }, []); // Empty dependency array means this runs once on mount
+  }, [currentUser]); // Add currentUser as dependency
 
   const loadData = async () => {
+    if (!currentUser) {
+      console.log('No user in context yet, waiting...');
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const [inv, te, proj, cli, user] = await Promise.all([
+      const [inv, te, proj, cli] = await Promise.all([
         Invoice.list('-created_date', 200), // Fetch the 200 most recent invoices
         TimeEntry.filter({ 
           status: { $nin: ['invoiced', 'written_off'] }, 
           billable: true 
         }), // Fetch only uninvoiced and not written off billable time entries for WIP
         Project.list(),
-        Client.list(),
-        User.me()
+        Client.list()
       ]);
 
       console.log('Loaded time entries for billing:', te?.length || 0);
@@ -83,7 +88,6 @@ export default function BillingPage() {
       setTimeEntries(te || []);
       setProjects(proj || []);
       setClients(cli || []);
-      setCurrentUser(user || null);
     } catch (error) {
       console.error('Error loading billing data:', error);
     }
