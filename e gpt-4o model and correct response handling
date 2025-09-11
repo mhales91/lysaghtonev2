@@ -1,0 +1,5 @@
+[33mea69ba1[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdevelop[m[33m, [m[1;31morigin/develop[m[33m)[m Add Client Name and Site Address to Step 1, hide AI Review button
+[33m5dc5670[m Fix TDZ error: Remove Bottleneck dependency and replace with simple concurrency limiter
+[33m6cf6c2b[m Fix authentication issues: Remove User.me() calls and localhost fallbacks
+[33m9cefc60[m Switch router to use LysaghtAI-minimal to fix 'oe' initialization error
+[33m8be7c3e[m Fix Vite build configuration - use esbuild and correct sourcemap syntax

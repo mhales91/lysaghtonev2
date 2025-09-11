@@ -292,7 +292,7 @@ The summary should be compelling and help the client understand exactly what the
         body: JSON.stringify({
           action: 'chat',
           prompt,
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           systemPrompt: 'You are a professional business consultant specializing in creating clear, compelling project summaries for Terms of Engagement documents. Focus on client value and professional outcomes.'
         })
       });
@@ -303,8 +303,8 @@ The summary should be compelling and help the client understand exactly what the
 
       const data = await response.json();
 
-      if (data.success && data.response) {
-        handleInputChange('project_summary', data.response);
+      if (data.success && (data.reply || data.response)) {
+        handleInputChange('project_summary', data.reply || data.response);
         toast.success('Project summary generated successfully!');
       } else {
         throw new Error(data.error || 'No summary generated');
