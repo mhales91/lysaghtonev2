@@ -11,7 +11,7 @@ import {
   openaiChat as realOpenaiChat, 
   chatWithRetrieval as realChatWithRetrieval, 
   chatStandard as realChatStandard 
-} from '@/api/openaiFunctions';
+} from '@/api/aiFunctionsSimple';
 
 // Helper function to check if model is a deep research model
 function isDeepResearchModel(model) {
