@@ -1,14 +1,29 @@
 // Signature Functions for TOE Process
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+// Handle both Vite (import.meta.env) and Node.js (process.env) environments
+const getEnvVar = (key, defaultValue) => {
+  if (typeof import.meta !== "undefined" && import.meta.env) {
+    return import.meta.env[key] || defaultValue;
+  }
+  return process.env[key] || defaultValue;
+};
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase configuration');
-}
+const supabaseUrl = getEnvVar("VITE_SUPABASE_URL", "https://lysaghtone.com/");
+const supabaseServiceKey = getEnvVar(
+  "VITE_SUPABASE_SERVICE_ROLE_KEY",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NTY2ODEyOTEsImV4cCI6MjA3MjI1NzI5MX0.M-3C2n285htKskqDHhGQMJx509mTAObsi3WRkpJv5iA"
+);
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
+  },
+  db: {
+    schema: "public",
+  },
+});
 
 // Handle Signature Operations
 export async function handleSignature(operation, payload) {

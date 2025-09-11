@@ -5,12 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // import { AIAssistant, ChatConversation, User } from '@/api/entitiesDirect';
 // Remove problematic imports that cause 'rt' error on Vercel
-import { 
-  openaiAdvanced as realOpenaiAdvanced, 
-  openaiChat as realOpenaiChat, 
-  chatWithRetrieval as realChatWithRetrieval, 
-  chatStandard as realChatStandard 
-} from '@/api/aiFunctionsMinimal';
+// import { 
+//   openaiAdvanced as realOpenaiAdvanced, 
+//   openaiChat as realOpenaiChat, 
+//   chatWithRetrieval as realChatWithRetrieval, 
+//   chatStandard as realChatStandard 
+// } from '@/api/aiFunctionsMinimal';
 // import { UploadFile } from '@/api/integrations';
 import { Bot, Send, User as UserIcon, Sparkles, MessageCircle, Trash2, Paperclip, X, BookText, Edit2, Loader } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
