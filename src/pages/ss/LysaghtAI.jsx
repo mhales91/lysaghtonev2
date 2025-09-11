@@ -271,9 +271,7 @@ export default function LysaghtAI() {
       setIsLoading(true);
 
       try {
-        if (!selectedAssistant.isGeneral) {
-          await AIAssistant.update(selectedAssistant.id, { usage_count: (selectedAssistant.usage_count || 0) + 1 });
-        }
+        // await AIAssistant.update(selectedAssistant.id, { usage_count: (selectedAssistant.usage_count || 0) + 1 });
 
         const fileUrls = currentFiles.map(f => f.url);
         let responseData;
@@ -357,16 +355,16 @@ export default function LysaghtAI() {
           message_count: finalMessages.length
         };
 
-        if (currentConversation) {
-          await ChatConversation.update(currentConversation.id, conversationData);
-        } else {
-          const conversationTitle = generateConversationTitle(userMessage.content);
-          const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
-          setCurrentConversation(newConversation);
-          const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
-          const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
-          setConversations(convos);
-        }
+        // if (currentConversation) {
+        //   await ChatConversation.update(currentConversation.id, conversationData);
+        // } else {
+        //   const conversationTitle = generateConversationTitle(userMessage.content);
+        //   const newConversation = await ChatConversation.create({ ...conversationData, title: conversationTitle });
+        //   setCurrentConversation(newConversation);
+        //   const assistantIdFilter = selectedAssistant.isGeneral ? { assistant_id: null } : { assistant_id: selectedAssistant.id };
+        //   const convos = await ChatConversation.filter({ created_by: currentUser.email, ...assistantIdFilter }, '-last_message_at');
+        //   setConversations(convos);
+        // }
       } catch (err) {
         console.error('Error in handleSendMessage:', {
           message: err.message,
