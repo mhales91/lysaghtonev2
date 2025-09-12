@@ -7,8 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { X, Plus, Trash2, Calculator } from "lucide-react";
 import { BillingSettings } from "@/api/entities"; // Added import
+import { TaskTemplate } from "@/api/entities";
 
-export default function CostCalculator({ companySettings, onCalculate, onClose }) {
+export default function CostCalculator({ 
+  companySettings, 
+  onCalculate, 
+  onClose, 
+  taskTemplates = [], 
+  linkedTaskTemplates = [],
+  onUpdateLinkedTemplates 
+}) {
   const [staffLines, setStaffLines] = useState([
     { role: 'intermediate', hours: 0, rate: 0 } // Initialize rate to 0, will be updated by defaultRates
   ]);
@@ -27,6 +35,8 @@ export default function CostCalculator({ companySettings, onCalculate, onClose }
     hours: 0, // Default hours for new entry
     rate: 0 // Will be set from defaultRates
   });
+
+  const [linkedTemplates, setLinkedTemplates] = useState(linkedTaskTemplates || []);
 
   useEffect(() => {
     loadDefaultRates();
@@ -134,9 +144,30 @@ export default function CostCalculator({ companySettings, onCalculate, onClose }
     return { breakdown, totalHours, totalCost };
   };
 
+  const addTaskTemplate = (templateId) => {
+    if (templateId && !linkedTemplates.includes(templateId)) {
+      const newLinkedTemplates = [...linkedTemplates, templateId];
+      setLinkedTemplates(newLinkedTemplates);
+      if (onUpdateLinkedTemplates) {
+        onUpdateLinkedTemplates(newLinkedTemplates);
+      }
+    }
+  };
+
+  const removeTaskTemplate = (templateId) => {
+    const newLinkedTemplates = linkedTemplates.filter(id => id !== templateId);
+    setLinkedTemplates(newLinkedTemplates);
+    if (onUpdateLinkedTemplates) {
+      onUpdateLinkedTemplates(newLinkedTemplates);
+    }
+  };
+
   const handleCalculate = () => {
     const calculation = calculateTotals();
-    onCalculate(calculation);
+    onCalculate({
+      ...calculation,
+      linkedTaskTemplates: linkedTemplates
+    });
   };
 
   const totals = calculateTotals();
@@ -271,6 +302,47 @@ export default function CostCalculator({ companySettings, onCalculate, onClose }
               </Card>
             ))}
           </div>
+
+          {/* Task Templates Section */}
+          {taskTemplates.length > 0 && (
+            <Card className="p-4">
+              <h4 className="font-semibold mb-4">Link Task Templates</h4>
+              <div className="space-y-3">
+                <Select
+                  value=""
+                  onValueChange={addTaskTemplate}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select task template" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {taskTemplates.map(template => (
+                      <SelectItem key={template.id} value={template.id}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {linkedTemplates.map((templateId) => {
+                  const template = taskTemplates.find(t => t.id === templateId);
+                  return (
+                    <div key={templateId} className="flex items-center justify-between bg-gray-50 p-2 rounded">
+                      <span className="text-sm">{template?.name || 'Unknown Template'}</span>
+                      <Button
+                        onClick={() => removeTaskTemplate(templateId)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-600 hover:text-red-700"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          )}
 
           {/* Summary */}
           <Card className="bg-gray-50">

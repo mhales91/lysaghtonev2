@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TagLibrary, CompanySettings, TOESignature, TaskTemplate, Client, User, TOELibraryItem } from "@/api/entities";
 import { handleSignature } from "@/api/signature-functions";
-import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, FileDown, Share, Edit2, UserCheck } from "lucide-react";
+import { X, Save, Plus, Trash2, Sparkles, Loader2, Calculator, Share, Edit2, UserCheck } from "lucide-react";
 import { toast } from 'sonner';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 import CostCalculator from "./CostCalculator";
 import TagSelector from "./TagSelector"; // This component might still be useful for general tags, but its specific uses in Scope/Assumptions/Exclusions steps are replaced by library items.
@@ -37,19 +37,51 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const [reviewers, setReviewers] = useState([]); // For internal review step
   const [showPreReviewVersion, setShowPreReviewVersion] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState({
+    query: '',
+    department: 'all', // Changed from '' to 'all'
+    category: 'scope'
+  });
+  const [currentScopeItem, setCurrentScopeItem] = useState(null);
+  const [currentStageIndex, setCurrentStageIndex] = useState(null);
+  const [currentItemIndex, setCurrentItemIndex] = useState(null);
 
   const [formData, setFormData] = useState({
     client_id: toe?.client_id || '',
     project_title: toe?.project_title || '',
     scope_of_work: toe?.scope_of_work || '',
-    fee_structure: toe?.fee_structure || [
-      { description: '', cost: 0, time_estimate: '', staff_breakdown: [], linked_task_templates: [] }
+    staged_scope: toe?.staged_scope || [
+      {
+        stage_number: 1,
+        stage_name: "Main Stage",
+        scope_items: [
+          {
+            id: crypto.randomUUID(),
+            description: '',
+            department: 'Planning',
+            time_estimate_weeks: 0,
+            source: 'manual'
+          }
+        ]
+      }
+    ],
+    use_staged_scope: true, // Always use staged scope
+    third_party_fees: toe?.third_party_fees || [
+      {
+        id: crypto.randomUUID(),
+        description: '',
+        third_party_entity: '',
+        fee_amount: 0,
+        source: 'manual'
+      }
     ],
     assumptions: toe?.assumptions || '',
     exclusions: toe?.exclusions || '',
     version: toe?.version || '1.0',
     ai_tags: toe?.ai_tags || [],
-    project_summary: toe?.project_summary || ''
+    project_summary: toe?.project_summary || '',
+    client_name: toe?.client_name || '',
+    site_address: toe?.site_address || ''
   });
 
   useEffect(() => {
@@ -60,6 +92,17 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
       setLysaghtSignatureRecord(null);
     }
   }, [toe]);
+
+  // Update library search category based on current step
+  useEffect(() => {
+    if (currentStep === 2) {
+      setLibrarySearch(prev => ({ ...prev, category: 'scope' }));
+    } else if (currentStep === 3) {
+      setLibrarySearch(prev => ({ ...prev, category: 'third_party_fee' }));
+    } else if (currentStep === 4) {
+      setLibrarySearch(prev => ({ ...prev, category: 'assumption' }));
+    }
+  }, [currentStep]);
 
   // Check if this TOE has a pre-review version
   const hasPreReviewVersion = !!toe?.pre_review_version;
@@ -136,65 +179,65 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     }));
   };
 
-  const handleFeeStructureChange = (index, field, value) => {
-    const newFeeStructure = [...formData.fee_structure];
-    newFeeStructure[index] = {
-      ...newFeeStructure[index],
-      [field]: field === 'cost' ? parseFloat(value) || 0 : value
+  const handleThirdPartyFeeChange = (index, field, value) => {
+    const newThirdPartyFees = [...formData.third_party_fees];
+    newThirdPartyFees[index] = {
+      ...newThirdPartyFees[index],
+      [field]: field === 'fee_amount' ? parseFloat(value) || 0 : value
     };
     setFormData(prev => ({
       ...prev,
-      fee_structure: newFeeStructure
+      third_party_fees: newThirdPartyFees
     }));
   };
 
-  const handleTaskTemplateLink = (feeIndex, templateId, isLinked) => {
-    const newFeeStructure = [...formData.fee_structure];
-    const currentLinks = newFeeStructure[feeIndex].linked_task_templates || [];
-    
-    if (isLinked) {
-      newFeeStructure[feeIndex].linked_task_templates = [...currentLinks, templateId];
-    } else {
-      newFeeStructure[feeIndex].linked_task_templates = currentLinks.filter(id => id !== templateId);
-    }
-    
+  const addThirdPartyFeeItem = () => {
     setFormData(prev => ({
       ...prev,
-      fee_structure: newFeeStructure
-    }));
-  };
-
-  const addFeeItem = () => {
-    setFormData(prev => ({
-      ...prev,
-      fee_structure: [
-        ...prev.fee_structure,
-        { description: '', cost: 0, time_estimate: '', staff_breakdown: [], linked_task_templates: [] }
+      third_party_fees: [
+        ...prev.third_party_fees,
+        {
+          id: crypto.randomUUID(),
+          description: '',
+          third_party_entity: '',
+          fee_amount: 0,
+          source: 'manual'
+        }
       ]
     }));
   };
 
-  const removeFeeItem = (index) => {
+  const removeThirdPartyFeeItem = (index) => {
     setFormData(prev => ({
       ...prev,
-      fee_structure: prev.fee_structure.filter((_, i) => i !== index)
+      third_party_fees: prev.third_party_fees.filter((_, i) => i !== index)
     }));
   };
 
-  const handleCostCalculation = (index, calculation) => {
-    const newFeeStructure = [...formData.fee_structure];
-    newFeeStructure[index] = {
-      ...newFeeStructure[index],
-      cost: calculation.totalCost,
-      time_estimate: `${calculation.totalHours} hours`,
-      staff_breakdown: calculation.breakdown
+  const addLibraryItemToThirdPartyFees = (item) => {
+    const newItem = {
+      id: crypto.randomUUID(),
+      description: item.content,
+      third_party_entity: item.third_party_entity || '',
+      fee_amount: item.fee_amount || 0,
+      source: 'library'
     };
+    
     setFormData(prev => ({
       ...prev,
-      fee_structure: newFeeStructure
+      third_party_fees: [...prev.third_party_fees, newItem]
     }));
-    setShowCostCalculator(false);
+    
+    // Update usage count
+    try {
+      TOELibraryItem.update(item.id, { 
+        usage_count: (item.usage_count || 0) + 1 
+      });
+    } catch (error) {
+      console.error('Error updating item usage:', error);
+    }
   };
+
 
   // Removed generateAISuggestions function from here as per outline.
   // AI review is now handled by the new AIReviewButton component.
@@ -229,8 +272,151 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     }
   };
 
+  // Migration function for legacy scope
+  const migrateLegacyScope = (legacyScope) => {
+    if (typeof legacyScope === 'string' && legacyScope.trim()) {
+      return [{
+        stage_number: 1,
+        stage_name: "Main Stage",
+        scope_items: [{
+          id: crypto.randomUUID(),
+          description: legacyScope,
+          department: 'Planning',
+          time_estimate_weeks: 0,
+          source: 'legacy'
+        }]
+      }];
+    }
+    return formData.staged_scope; // Already in new format
+  };
+
+  // Staged scope management functions
+  const addNewStage = () => {
+    const newStage = {
+      stage_number: formData.staged_scope.length + 1,
+      stage_name: `Stage ${formData.staged_scope.length + 1}`,
+      scope_items: [{
+        id: crypto.randomUUID(),
+        description: '',
+        department: 'Planning',
+        time_estimate_weeks: 0,
+        source: 'manual'
+      }]
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      staged_scope: [...prev.staged_scope, newStage]
+    }));
+  };
+
+  const updateStage = (stageIndex, updates) => {
+    setFormData(prev => ({
+      ...prev,
+      staged_scope: prev.staged_scope.map((stage, index) => 
+        index === stageIndex ? { ...stage, ...updates } : stage
+      )
+    }));
+  };
+
+  const deleteStage = (stageIndex) => {
+    if (formData.staged_scope.length <= 1) return; // Don't delete the last stage
+    
+    setFormData(prev => ({
+      ...prev,
+      staged_scope: prev.staged_scope.filter((_, index) => index !== stageIndex)
+        .map((stage, index) => ({ ...stage, stage_number: index + 1 }))
+    }));
+  };
+
+  const addScopeItem = (stageIndex) => {
+    const newItem = {
+      id: crypto.randomUUID(),
+      description: '',
+      department: 'Planning',
+      time_estimate_weeks: 0,
+      source: 'manual'
+    };
+    
+    updateStage(stageIndex, {
+      scope_items: [...formData.staged_scope[stageIndex].scope_items, newItem]
+    });
+  };
+
+  const updateScopeItem = (stageIndex, itemIndex, updates) => {
+    const updatedItems = formData.staged_scope[stageIndex].scope_items.map((item, index) =>
+      index === itemIndex ? { ...item, ...updates } : item
+    );
+    
+    updateStage(stageIndex, { scope_items: updatedItems });
+  };
+
+  const deleteScopeItem = (stageIndex, itemIndex) => {
+    const updatedItems = formData.staged_scope[stageIndex].scope_items.filter((_, index) => index !== itemIndex);
+    updateStage(stageIndex, { scope_items: updatedItems });
+  };
+
+  const addLibraryItemToStage = (item, stageIndex) => {
+    const newItem = {
+      id: crypto.randomUUID(),
+      description: item.content,
+      department: item.department || 'Planning',
+      time_estimate_weeks: 0,
+      source: 'library'
+    };
+    
+    updateStage(stageIndex, {
+      scope_items: [...formData.staged_scope[stageIndex].scope_items, newItem]
+    });
+    
+    // Update usage count
+    try {
+      TOELibraryItem.update(item.id, { 
+        usage_count: (item.usage_count || 0) + 1 
+      });
+    } catch (error) {
+      console.error('Error updating item usage:', error);
+    }
+  };
+
+  // Filter library items based on search
+  const filteredLibraryItems = libraryItems.filter(item => {
+    const matchesQuery = !librarySearch.query || 
+      item.name.toLowerCase().includes(librarySearch.query.toLowerCase()) ||
+      item.content.toLowerCase().includes(librarySearch.query.toLowerCase());
+    
+    const matchesDepartment = !librarySearch.department || 
+      librarySearch.department === 'all' ||
+      item.department === librarySearch.department;
+    
+    const matchesCategory = item.category === librarySearch.category;
+    
+    // Debug logging
+    console.log('Filtering item:', {
+      name: item.name,
+      department: item.department,
+      searchDepartment: librarySearch.department,
+      matchesDepartment,
+      matchesCategory,
+      category: item.category,
+      searchCategory: librarySearch.category
+    });
+    
+    return matchesQuery && matchesDepartment && matchesCategory;
+  });
+
+  // Get unique departments from library items
+  const libraryDepartments = [...new Set(libraryItems
+    .filter(item => item.department)
+    .map(item => item.department)
+  )].sort();
+  
+  // Always include default departments, plus any additional ones from library items
+  const defaultDepartments = ['Planning', 'Engineering', 'Surveying', 'Project Management'];
+  const availableDepartments = [...new Set([...defaultDepartments, ...libraryDepartments])].sort();
+
   const calculateTotals = () => {
-    const subtotal = formData.fee_structure.reduce((sum, item) => sum + (item.cost || 0), 0);
+    const subtotal = formData.third_party_fees.reduce((sum, item) => sum + (item.fee_amount || 0), 0);
     const gst = subtotal * (companySettings?.tax_rate || 0.15);
     const total = subtotal + gst;
     return { subtotal, gst, total };
@@ -266,7 +452,7 @@ SCOPE OF WORK:
 ${formData.scope_of_work || 'Not defined'}
 
 FEE STRUCTURE:
-${formData.fee_structure?.map(item => `- ${item.description}: $${item.cost}`).join('\n') || 'Not defined'}
+${formData.third_party_fees?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
 
 ASSUMPTIONS:
 ${formData.assumptions || 'Not defined'}
@@ -340,21 +526,26 @@ The summary should be compelling and help the client understand exactly what the
     try {
       const { subtotal, total } = calculateTotals();
       
-      // Validate project summary
-      const summaryValidation = validateProjectSummary();
-      if (!summaryValidation.isValid) {
-        toast.error(summaryValidation.message);
-        setIsSaving(false);
-        return;
-      }
+      // Only validate project summary if we're not saving as draft
+      // Project summary validation should only be required when finalizing
+      // const summaryValidation = validateProjectSummary();
+      // if (!summaryValidation.isValid) {
+      //   toast.error(summaryValidation.message);
+      //   setIsSaving(false);
+      //   return;
+      // }
       
       // Clean and validate the data before sending
       const submitData = {
         client_id: formData.client_id,
         project_title: formData.project_title?.trim(),
+        client_name: formData.client_name?.trim(),
+        site_address: formData.site_address?.trim(),
         scope_of_work: formData.scope_of_work?.trim(),
-        fee_structure: formData.fee_structure.filter(item => 
-          item.description?.trim() || item.cost > 0
+        staged_scope: formData.staged_scope,
+        use_staged_scope: formData.use_staged_scope,
+        third_party_fees: formData.third_party_fees.filter(item => 
+          item.description?.trim() || item.fee_amount > 0
         ),
         assumptions: formData.assumptions?.trim(),
         exclusions: formData.exclusions?.trim(),
@@ -382,10 +573,6 @@ The summary should be compelling and help the client understand exactly what the
     setIsSaving(false);
   };
 
-  const exportToWord = async () => {
-    // This would integrate with a Word export service
-    alert('Word export functionality would be implemented here');
-  };
 
   const generateShareLink = async () => {
     if (!toe || !toe.id) {
@@ -430,7 +617,7 @@ The summary should be compelling and help the client understand exactly what the
   const steps = [
     { number: 1, title: 'Project Details', description: 'Basic project information' },
     { number: 2, title: 'Scope of Work', description: 'Define project scope' },
-    { number: 3, title: 'Fee Structure', description: 'Set pricing and fees' },
+    { number: 3, title: 'Third Party Fees', description: 'Add third party fees and costs' },
     { number: 4, title: 'Assumptions & Exclusions', description: 'Add conditions' },
     { number: 5, title: 'Internal Review', description: 'Request peer review' },
     { number: 6, title: 'Review & Finalize', description: 'Final review and save' }
@@ -467,19 +654,93 @@ The summary should be compelling and help the client understand exactly what the
     }
   };
 
-  const getDisplayedFeeStructure = () => {
+  const getDisplayedThirdPartyFees = () => {
     return showPreReviewVersion && hasPreReviewVersion
-      ? toe.pre_review_version.fee_structure || []
-      : formData.fee_structure;
+      ? toe.pre_review_version.third_party_fees || []
+      : formData.third_party_fees;
   }
 
   const calculateDisplayedTotals = () => {
-    const displayedFeeStructure = getDisplayedFeeStructure();
-    const subtotal = displayedFeeStructure.reduce((sum, item) => sum + (item.cost || 0), 0);
+    const displayedThirdPartyFees = getDisplayedThirdPartyFees();
+    const subtotal = displayedThirdPartyFees.reduce((sum, item) => sum + (item.fee_amount || 0), 0);
     const gst = subtotal * (companySettings?.tax_rate || 0.15);
     const total = subtotal + gst;
     return { subtotal, gst, total };
   }
+
+  // Add these reordering functions after the existing stage management functions
+  const reorderStages = (startIndex, endIndex) => {
+    const result = Array.from(formData.staged_scope);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    
+    // Update stage numbers
+    const updatedStages = result.map((stage, index) => ({
+      ...stage,
+      stage_number: index + 1
+    }));
+    
+    setFormData(prev => ({
+      ...prev,
+      staged_scope: updatedStages
+    }));
+  };
+
+  const reorderScopeItems = (stageIndex, startIndex, endIndex) => {
+    const stage = formData.staged_scope[stageIndex];
+    const result = Array.from(stage.scope_items);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    
+    updateStage(stageIndex, { scope_items: result });
+  };
+
+  const reorderThirdPartyFees = (startIndex, endIndex) => {
+    const result = Array.from(formData.third_party_fees);
+    const [removed] = result.splice(startIndex, 1);
+    result.splice(endIndex, 0, removed);
+    
+    setFormData(prev => ({
+      ...prev,
+      third_party_fees: result
+    }));
+  };
+
+  const onDragEnd = (result) => {
+    const { destination, source, type } = result;
+    
+    if (!destination) return;
+    
+    if (type === 'stage') {
+      reorderStages(source.index, destination.index);
+    } else if (type === 'scope-item') {
+      const stageIndex = parseInt(source.droppableId.split('-')[1]);
+      reorderScopeItems(stageIndex, source.index, destination.index);
+    } else if (type === 'third-party-fee') {
+      reorderThirdPartyFees(source.index, destination.index);
+    }
+  };
+
+  const openCostCalculator = (stageIndex, itemIndex) => {
+    const item = formData.staged_scope[stageIndex].scope_items[itemIndex];
+    setCurrentStageIndex(stageIndex);
+    setCurrentItemIndex(itemIndex);
+    setCurrentScopeItem(item);
+    setShowCostCalculator(true);
+  };
+
+  const handleScopeItemCostCalculation = (calculation) => {
+    updateScopeItem(currentStageIndex, currentItemIndex, {
+      staffBreakdown: calculation.breakdown,
+      totalHours: calculation.totalHours,
+      totalCost: calculation.totalCost,
+      linkedTaskTemplates: calculation.linkedTaskTemplates || []
+    });
+    setShowCostCalculator(false);
+    setCurrentScopeItem(null);
+    setCurrentStageIndex(null);
+    setCurrentItemIndex(null);
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
@@ -510,18 +771,34 @@ The summary should be compelling and help the client understand exactly what the
               )}
             </div>
             <div className="flex gap-2">
+              {/* Always show Save button, but with different text for new vs existing TOEs */}
+              <Button 
+                onClick={handleSubmit} 
+                disabled={isSaving || showPreReviewVersion}
+                style={{ backgroundColor: '#5E0F68' }}
+                className="hover:bg-purple-700"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    {toe ? 'Save TOE' : 'Create TOE'}
+                  </>
+                )}
+              </Button>
+              
+              {/* Only show Share button for existing TOEs */}
               {toe && (
-                <>
-                  <Button variant="outline" onClick={exportToWord}>
-                    <FileDown className="w-4 h-4 mr-2" />
-                    Export Word
-                  </Button>
-                  <Button variant="outline" onClick={generateShareLink}>
-                    <Share className="w-4 h-4 mr-2" />
-                    Share for Signature
-                  </Button>
-                </>
+                <Button variant="outline" onClick={generateShareLink}>
+                  <Share className="w-4 h-4 mr-2" />
+                  Share for Signature
+                </Button>
               )}
+              
               <Button variant="ghost" size="icon" onClick={onCancel}>
                 <X className="w-4 h-4" />
               </Button>
@@ -631,7 +908,8 @@ The summary should be compelling and help the client understand exactly what the
                       <Label htmlFor="client_name">Client Name *</Label>
                       <Input
                         id="client_name"
-                        value={getSelectedClient().contact_person || ''}
+                        value={formData.client_name || getSelectedClient().contact_person || ''}
+                        onChange={(e) => handleInputChange('client_name', e.target.value)}
                         placeholder="Enter client contact name"
                         readOnly={showPreReviewVersion}
                         className={showPreReviewVersion ? 'bg-gray-50' : ''}
@@ -643,9 +921,10 @@ The summary should be compelling and help the client understand exactly what the
                       <Label htmlFor="site_address">Site Address *</Label>
                       <Textarea
                         id="site_address"
-                        value={getSelectedClient().address ? 
+                        value={formData.site_address || (getSelectedClient().address ? 
                           `${getSelectedClient().address.street || ''}, ${getSelectedClient().address.city || ''} ${getSelectedClient().address.postcode || ''}`.trim() : 
-                          ''}
+                          '')}
+                        onChange={(e) => handleInputChange('site_address', e.target.value)}
                         placeholder="Enter project site address"
                         rows={3}
                         readOnly={showPreReviewVersion}
@@ -691,185 +970,474 @@ The summary should be compelling and help the client understand exactly what the
                 </div>
               </div>
 
-              <div className="grid lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="scope">Scope Description *</Label>
+              {/* Staged Scope Method (Only Option) */}
+              <div className="space-y-6">
+                {/* Stages Container */}
+                <DragDropContext onDragEnd={onDragEnd}>
+                  <Droppable droppableId="stages" type="stage">
+                    {(provided) => (
+                      <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-6">
+                        {formData.staged_scope.map((stage, stageIndex) => (
+                          <Draggable key={stage.stage_number} draggableId={`stage-${stageIndex}`} index={stageIndex}>
+                            {(provided, snapshot) => (
+                              <div ref={provided.innerRef} {...provided.droppableProps}>
+                                <Card className={`p-4 ${snapshot.isDragging ? 'shadow-lg' : ''}`}>
+                                  <div className="space-y-4">
+                                    {/* Stage Header */}
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div 
+                                          {...provided.dragHandleProps}
+                                          className="cursor-move p-1 hover:bg-gray-200 rounded"
+                                        >
+                                          <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                                          </svg>
+                                        </div>
+                                        <Badge variant="outline" className="text-sm">
+                                          Stage {stage.stage_number}
+                                        </Badge>
+                                        <Input
+                                          value={stage.stage_name}
+                                          onChange={(e) => updateStage(stageIndex, { stage_name: e.target.value })}
+                                          placeholder="Stage name (e.g., Phase 1: Design)"
+                                          className="flex-1"
+                                          readOnly={showPreReviewVersion}
+                                        />
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <Button
+                                          onClick={() => addScopeItem(stageIndex)}
+                                          variant="outline"
+                                          size="sm"
+                                          disabled={showPreReviewVersion}
+                                        >
+                                          <Plus className="w-4 h-4 mr-1" />
+                                          Add Item
+                                        </Button>
+                                        {formData.staged_scope.length > 1 && (
+                                          <Button
+                                            onClick={() => deleteStage(stageIndex)}
+                                            variant="outline"
+                                            size="sm"
+                                            className="text-red-600 hover:text-red-700"
+                                            disabled={showPreReviewVersion}
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Scope Items */}
+                                    <Droppable droppableId={`scope-items-${stageIndex}`} type="scope-item">
+                                      {(provided) => (
+                                        <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-3">
+                                          {stage.scope_items.map((item, itemIndex) => (
+                                            <Draggable key={item.id} draggableId={item.id} index={itemIndex}>
+                                              {(provided, snapshot) => (
+                                                <Card 
+                                                  ref={provided.innerRef}
+                                                  {...provided.draggableProps}
+                                                  className={`p-3 bg-gray-50 ${snapshot.isDragging ? 'shadow-lg' : ''}`}
+                                                >
+                                                  <div className="grid md:grid-cols-12 gap-3">
+                                                    <div className="md:col-span-1 flex items-center">
+                                                      <div 
+                                                        {...provided.dragHandleProps}
+                                                        className="cursor-move p-2 hover:bg-gray-200 rounded"
+                                                      >
+                                                        <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                                          <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                                                        </svg>
+                                                      </div>
+                                                    </div>
+                                                    <div className="md:col-span-4">
+                                                      <Label className="text-xs text-gray-600">Description</Label>
                     <Textarea
-                      id="scope"
-                      value={showPreReviewVersion && hasPreReviewVersion ? 
-                        toe.pre_review_version.scope_of_work : 
-                        formData.scope_of_work}
-                      onChange={showPreReviewVersion ? undefined : (e) => handleInputChange('scope_of_work', e.target.value)}
-                      placeholder="Describe the scope of work to be performed..."
-                      rows={8}
+                                                        value={item.description}
+                                                        onChange={(e) => updateScopeItem(stageIndex, itemIndex, { description: e.target.value })}
+                                                        placeholder="Describe this scope item..."
+                                                        rows={2}
                       readOnly={showPreReviewVersion}
-                      className={showPreReviewVersion ? 'bg-gray-50' : ''}
+                                                        className="text-sm"
                     />
                   </div>
+                                                    <div className="md:col-span-2">
+                                                      <Label className="text-xs text-gray-600">Department</Label>
+                                                      <Select
+                                                        value={item.department}
+                                                        onValueChange={(value) => updateScopeItem(stageIndex, itemIndex, { department: value })}
+                                                        disabled={showPreReviewVersion}
+                                                      >
+                                                        <SelectTrigger className="text-sm">
+                                                          <SelectValue placeholder="Select department" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                          {availableDepartments.length > 0 ? availableDepartments.map(dept => (
+                                                            <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                                                          )) : null}
+                                                          <SelectItem value="Other">Other</SelectItem>
+                                                        </SelectContent>
+                                                      </Select>
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                      <Label className="text-xs text-gray-600">Time (weeks)</Label>
+                                                      <Input
+                                                        type="number"
+                                                        value={item.time_estimate_weeks}
+                                                        onChange={(e) => updateScopeItem(stageIndex, itemIndex, { time_estimate_weeks: parseInt(e.target.value) || 0 })}
+                                                        placeholder="0"
+                                                        min="0"
+                                                        readOnly={showPreReviewVersion}
+                                                        className="text-sm"
+                                                      />
+                                                    </div>
+                                                    <div className="md:col-span-2">
+                                                      <Label className="text-xs text-gray-600">Total Cost</Label>
+                                                      <div className="flex items-center gap-2">
+                                                        <div className="flex-1 bg-gray-50 px-3 py-2 rounded text-sm font-medium">
+                                                          {item.totalCost ? `$${item.totalCost.toLocaleString()}` : 'Not calculated'}
+                                                        </div>
+                                                        <Button
+                                                          onClick={() => openCostCalculator(stageIndex, itemIndex)}
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="text-blue-600 hover:text-blue-700 border-blue-200 hover:border-blue-300"
+                                                          disabled={showPreReviewVersion}
+                                                        >
+                                                          <Calculator className="w-4 h-4" />
+                                                        </Button>
+                                                      </div>
+                                                      {item.totalHours && (
+                                                        <p className="text-xs text-gray-500 mt-1">
+                                                          {item.totalHours} hours
+                                                        </p>
+                                                      )}
+                                                    </div>
+                                                    <div className="md:col-span-1 flex items-end">
+                                                      <Button
+                                                        onClick={() => deleteScopeItem(stageIndex, itemIndex)}
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-600 hover:text-red-700 p-1"
+                                                        disabled={showPreReviewVersion}
+                                                      >
+                                                        <Trash2 className="w-4 h-4" />
+                                                      </Button>
+                                                    </div>
                 </div>
 
-                <div className="lg:col-span-1">
+                                                  {/* Show linked task templates if any */}
+                                                  {item.linkedTaskTemplates && item.linkedTaskTemplates.length > 0 && (
+                                                    <div className="mt-2">
+                                                      <div className="flex flex-wrap gap-1">
+                                                        {item.linkedTaskTemplates.map((templateId, idx) => {
+                                                          const template = taskTemplates.find(t => t.id === templateId);
+                                                          return (
+                                                            <Badge key={idx} variant="outline" className="text-xs">
+                                                              {template?.name || 'Unknown Template'}
+                                                            </Badge>
+                                                          );
+                                                        })}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </Card>
+                                              )}
+                                            </Draggable>
+                                          ))}
+                                          {provided.placeholder}
+                                        </div>
+                                      )}
+                                    </Droppable>
+                                  </div>
+                                </Card>
+                              </div>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </DragDropContext>
+
+                {/* Add Stage Button */}
+                <Button
+                  onClick={addNewStage}
+                  variant="outline"
+                  className="w-full"
+                  disabled={showPreReviewVersion}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Stage
+                </Button>
+
+                {/* Enhanced Library Search */}
+                <Card className="p-4">
                   <div className="space-y-4">
                     <h4 className="font-medium">Scope Library</h4>
-                    <div className="space-y-2 max-h-80 overflow-y-auto">
-                      {libraryItems.filter(item => item.category === 'scope').map(item => (
+                    
+                    {/* Search Controls */}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm">Search Library</Label>
+                        <Input
+                          value={librarySearch.query}
+                          onChange={(e) => setLibrarySearch(prev => ({ ...prev, query: e.target.value }))}
+                          placeholder="Search scope items..."
+                          className="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm">Filter by Department</Label>
+                        <Select
+                          value={librarySearch.department}
+                          onValueChange={(value) => setLibrarySearch(prev => ({ ...prev, department: value }))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="All departments" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All departments</SelectItem>
+                            {availableDepartments.length > 0 ? availableDepartments.map(dept => (
+                              <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                            )) : null}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Library Items */}
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {filteredLibraryItems.map(item => (
                         <div 
                           key={item.id} 
-                          className={`p-3 border rounded-lg ${showPreReviewVersion ? 'cursor-not-allowed bg-gray-100' : 'hover:bg-gray-50 cursor-pointer'}`} 
-                          onClick={showPreReviewVersion ? undefined : () => addLibraryItemToField(item, 'scope_of_work')}
+                          className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                          onClick={() => {
+                            // Add to first stage by default, or let user choose
+                            addLibraryItemToStage(item, 0);
+                          }}
                         >
-                          <h5 className="font-medium text-sm">{item.name}</h5>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h5 className="font-medium text-sm">{item.title || item.name}</h5>
                           <p className="text-xs text-gray-600 mt-1">{item.content.substring(0, 100)}{item.content.length > 100 ? '...' : ''}</p>
-                          {item.tags && item.tags.length > 0 && (
-                            <div className="flex gap-1 mt-2">
-                              {item.tags.slice(0, 2).map(tag => (
+                              <div className="flex gap-2 mt-2">
+                                {item.department && (
+                                  <Badge variant="outline" className="text-xs">{item.department}</Badge>
+                                )}
+                                {item.tags && item.tags.slice(0, 2).map(tag => (
                                 <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
                               ))}
                             </div>
-                          )}
                         </div>
-                      ))}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </Button>
                     </div>
                   </div>
+                      ))}
+                      {filteredLibraryItems.length === 0 && (
+                        <p className="text-sm text-gray-500 text-center py-4">
+                          No library items found. Try adjusting your search criteria.
+                        </p>
+                      )}
                 </div>
+                  </div>
+                </Card>
               </div>
             </div>
           )}
 
-          {/* Step 3: Fee Structure */}
+          {/* Step 3: Third Party Fees */}
           {currentStep === 3 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold">Fee Structure</h3>
-                  <p className="text-sm text-gray-600">Break down the project costs and link to task templates</p>
+                  <h3 className="text-lg font-semibold">Third Party Fees</h3>
+                  <p className="text-sm text-gray-600">Add third party fees and costs from the library or manually. Drag to reorder items.</p>
                 </div>
-                <Button onClick={addFeeItem} variant="outline" disabled={showPreReviewVersion}>
+                <Button onClick={addThirdPartyFeeItem} variant="outline" disabled={showPreReviewVersion}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Item
                 </Button>
               </div>
 
-              <div className="space-y-4">
-                {getDisplayedFeeStructure().map((item, index) => (
-                  <Card key={index} className="p-4">
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h4 className="font-medium">Fee Item {index + 1}</h4>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowCostCalculator(index)}
-                            disabled={showPreReviewVersion}
-                          >
-                            <Calculator className="w-4 h-4 mr-2" />
-                            Calculate Cost
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeFeeItem(index)}
-                            className="text-red-600"
-                            disabled={showPreReviewVersion}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
+              <DragDropContext onDragEnd={onDragEnd}>
+                <Droppable droppableId="third-party-fees" type="third-party-fee">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-4">
+                      {getDisplayedThirdPartyFees().map((item, index) => (
+                        <Draggable key={item.id || index} draggableId={item.id || `third-party-fee-${index}`} index={index}>
+                          {(provided, snapshot) => (
+                            <Card 
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              className={`p-4 ${snapshot.isDragging ? 'shadow-lg' : ''}`}
+                            >
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div 
+                                      {...provided.dragHandleProps}
+                                      className="cursor-move p-1 hover:bg-gray-200 rounded"
+                                    >
+                                      <svg className="w-4 h-4 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                                      </svg>
+                                    </div>
+                                    <h4 className="font-medium">Third Party Fee {index + 1}</h4>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => removeThirdPartyFeeItem(index)}
+                                      className="text-red-600"
+                                      disabled={showPreReviewVersion}
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
                       
                       <div className="grid md:grid-cols-12 gap-4">
                         <div className="md:col-span-6">
                           <Label>Description</Label>
                           <Textarea
                             value={item.description}
-                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'description', e.target.value)}
-                            placeholder="e.g. Project Administration"
+                            onChange={showPreReviewVersion ? undefined : (e) => handleThirdPartyFeeChange(index, 'description', e.target.value)}
+                            placeholder="e.g. Council consent fees"
                             rows={3}
                             readOnly={showPreReviewVersion}
                             className={showPreReviewVersion ? 'bg-gray-50' : ''}
                           />
                         </div>
-                        <div className="md:col-span-2">
-                          <Label>Cost ($)</Label>
+                        <div className="md:col-span-3">
+                          <Label>Third Party Entity</Label>
+                          <Input
+                            value={item.third_party_entity}
+                            onChange={showPreReviewVersion ? undefined : (e) => handleThirdPartyFeeChange(index, 'third_party_entity', e.target.value)}
+                            placeholder="e.g. Tauranga City Council"
+                            readOnly={showPreReviewVersion}
+                            className={showPreReviewVersion ? 'bg-gray-50' : ''}
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <Label>Fee Amount ($)</Label>
                           <Input
                             type="number"
-                            value={item.cost}
-                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'cost', e.target.value)}
-                            placeholder="0"
-                            readOnly={showPreReviewVersion}
-                            className={showPreReviewVersion ? 'bg-gray-50' : ''}
-                          />
-                        </div>
-                        <div className="md:col-span-4">
-                          <Label>Time Estimate</Label>
-                          <Input
-                            value={item.time_estimate}
-                            onChange={showPreReviewVersion ? undefined : (e) => handleFeeStructureChange(index, 'time_estimate', e.target.value)}
-                            placeholder="e.g. 2 weeks"
+                            step="0.01"
+                            value={item.fee_amount}
+                            onChange={showPreReviewVersion ? undefined : (e) => handleThirdPartyFeeChange(index, 'fee_amount', e.target.value)}
+                            placeholder="0.00"
                             readOnly={showPreReviewVersion}
                             className={showPreReviewVersion ? 'bg-gray-50' : ''}
                           />
                         </div>
                       </div>
 
-                      {item.staff_breakdown && item.staff_breakdown.length > 0 && (
-                        <div className="bg-gray-50 p-3 rounded">
-                          <h5 className="font-medium mb-2">Staff Breakdown:</h5>
-                          <div className="space-y-1 text-sm">
-                            {item.staff_breakdown.map((staff, i) => (
-                              <div key={i} className="flex justify-between">
-                                <span>{staff.role} - {staff.hours} hours</span>
-                                <span>${staff.cost.toFixed(2)}</span>
+                                {item.source === 'library' && (
+                                  <div className="bg-blue-50 p-2 rounded text-sm text-blue-800">
+                                    <span className="font-medium">From Library:</span> This item was added from the Third Party Fees library
+                                  </div>
+                                )}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Task Template Linking */}
-                      <div className="border-t pt-4">
-                        <Label className="text-sm font-medium">Link Task Templates</Label>
-                        <p className="text-xs text-gray-500 mb-3">
-                          Select task templates that correspond to this fee item. When a project is created from this TOE, these tasks will be automatically added.
-                        </p>
-                        <div className="grid md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                          {taskTemplates.map(template => {
-                            const isLinked = (item.linked_task_templates || []).includes(template.id);
-                            return (
-                              <div key={template.id} className={`flex items-center space-x-2 p-2 border rounded ${showPreReviewVersion ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
-                                <Checkbox
-                                  id={`fee-${index}-template-${template.id}`}
-                                  checked={isLinked}
-                                  onCheckedChange={showPreReviewVersion ? undefined : (checked) => handleTaskTemplateLink(index, template.id, checked)}
-                                  disabled={showPreReviewVersion}
-                                />
-                                <Label 
-                                  htmlFor={`fee-${index}-template-${template.id}`}
-                                  className="text-sm cursor-pointer flex-1"
-                                >
-                                  {template.name}
-                                </Label>
-                                <Badge variant="outline" className="text-xs">
-                                  {template.dept}
-                                </Badge>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {taskTemplates.length === 0 && (
-                          <p className="text-sm text-gray-500 italic">
-                            No task templates available. Create some in Admin → Task Templates.
-                          </p>
-                        )}
-                      </div>
+                            </Card>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
                     </div>
-                  </Card>
-                ))}
-              </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
 
-              {/* Fee Summary */}
+              {/* Third Party Fees Library */}
+              <Card className="p-4">
+                <div className="space-y-4">
+                  <h4 className="font-medium">Third Party Fees Library</h4>
+                  
+                  {/* Search Controls */}
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm">Search Library</Label>
+                      <Input
+                        value={librarySearch.query}
+                        onChange={(e) => setLibrarySearch(prev => ({ ...prev, query: e.target.value }))}
+                        placeholder="Search third party fees..."
+                        className="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm">Filter by Department</Label>
+                      <Select
+                        value={librarySearch.department}
+                        onValueChange={(value) => setLibrarySearch(prev => ({ ...prev, department: value }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="All departments" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All departments</SelectItem>
+                          {availableDepartments.length > 0 ? availableDepartments.map(dept => (
+                            <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                          )) : null}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Library Items */}
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {filteredLibraryItems.map(item => (
+                      <div 
+                        key={item.id} 
+                        className="p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
+                        onClick={() => addLibraryItemToThirdPartyFees(item)}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h5 className="font-medium text-sm">{item.title || item.name}</h5>
+                            <p className="text-xs text-gray-600 mt-1">{item.content.substring(0, 100)}{item.content.length > 100 ? '...' : ''}</p>
+                            <div className="flex gap-2 mt-2">
+                              {item.third_party_entity && (
+                                <Badge variant="outline" className="text-xs">{item.third_party_entity}</Badge>
+                              )}
+                              {item.fee_amount && (
+                                <Badge variant="outline" className="text-xs">${parseFloat(item.fee_amount).toFixed(2)}</Badge>
+                              )}
+                              {item.tags && item.tags.slice(0, 2).map(tag => (
+                                <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredLibraryItems.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        No third party fee items found. Try adjusting your search criteria or create some in Admin → TOE Content Library.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Third Party Fees Summary */}
               <Card className="bg-gray-50">
                 <CardContent className="p-4">
                   <div className="space-y-2">
@@ -1004,7 +1572,7 @@ The summary should be compelling and help the client understand exactly what the
             </div>
           )}
 
-          {/* Step 6: Review */}
+          {/* Step 6: Review & Finalize */}
           {currentStep === 6 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -1023,11 +1591,6 @@ The summary should be compelling and help the client understand exactly what the
                     )}
                     {isGeneratingSummary ? 'Generating...' : 'AI Generate Summary'}
                   </Button>
-                  {/* AI Review button temporarily hidden */}
-                  {/* <AIReviewButton 
-                    toeData={showPreReviewVersion && hasPreReviewVersion ? toe.pre_review_version : formData} 
-                    client={getSelectedClient()}
-                  /> */}
                 </div>
               </div>
 
@@ -1134,8 +1697,8 @@ The summary should be compelling and help the client understand exactly what the
                     <h4 className="font-semibold mb-3">Financial Summary</h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Fee Items:</span>
-                        <span>{getDisplayedFeeStructure().length}</span>
+                        <span className="text-gray-600">Third Party Fee Items:</span>
+                        <span>{getDisplayedThirdPartyFees().length}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Subtotal:</span>
@@ -1153,7 +1716,7 @@ The summary should be compelling and help the client understand exactly what the
               <Tabs defaultValue="scope" className="w-full">
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="scope">Scope</TabsTrigger>
-                  <TabsTrigger value="fees">Fees</TabsTrigger>
+                  <TabsTrigger value="fees">Third Party Fees</TabsTrigger>
                   <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
                   <TabsTrigger value="exclusions">Exclusions</TabsTrigger>
                 </TabsList>
@@ -1172,12 +1735,12 @@ The summary should be compelling and help the client understand exactly what the
                 <TabsContent value="fees" className="mt-4">
                   <Card>
                     <CardContent className="p-4">
-                      <h4 className="font-semibold mb-3">Fee Structure</h4>
+                      <h4 className="font-semibold mb-3">Third Party Fees</h4>
                       <div className="space-y-3">
-                        {getDisplayedFeeStructure().map((item, index) => (
+                        {getDisplayedThirdPartyFees().map((item, index) => (
                           <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
                             <span className="text-sm">{item.description}</span>
-                            <span className="font-medium">${item.cost.toLocaleString()}</span>
+                            <span className="font-medium">${item.fee_amount.toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
@@ -1245,78 +1808,41 @@ The summary should be compelling and help the client understand exactly what the
                   )}
                 </CardContent>
               </Card>
-
             </div>
           )}
-
-          {/* Navigation Buttons */}
-          <div className="flex justify-between pt-6 border-t">
-            <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentStep === 1 || showPreReviewVersion}
-            >
-              Previous
-            </Button>
-            
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={onCancel}>
-                Cancel
-              </Button>
-              
-              {currentStep < steps.length ? (
-                <Button
-                  onClick={handleNext}
-                  disabled={!canProceedToNext() || showPreReviewVersion}
-                  style={{ backgroundColor: '#5E0F68' }}
-                  className="hover:bg-purple-700"
-                >
-                  Next
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isSaving || showPreReviewVersion}
-                  style={{ backgroundColor: '#5E0F68' }}
-                  className="hover:bg-purple-700"
-                >
-                  {isSaving ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 mr-2" />
-                  )}
-                  {isSaving ? 'Saving...' : 'Save TOE'}
-                </Button>
-              )}
-            </div>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Cost Calculator Modal */}
-      {showCostCalculator !== false && (
-        <CostCalculator
-          companySettings={companySettings}
-          onCalculate={(calculation) => handleCostCalculation(showCostCalculator, calculation)}
-          onClose={() => setShowCostCalculator(false)}
-        />
-      )}
-      
-      {/* Lysaght Signature Modal */}
-      {showSignatureModal && (
+      {/* Signature Modal */}
+      {showSignatureModal && lysaghtSignatureRecord && (
         <SignatureModal
+          isOpen={showSignatureModal}
           onClose={() => setShowSignatureModal(false)}
+          signatureRecord={lysaghtSignatureRecord}
           onSave={handleSaveLysaghtSignature}
-          title="Provide Lysaght Signature"
+          isLoading={isSignatureLoading}
         />
       )}
 
-      {/* Client Form Modal */}
+      {/* Cost Calculator */}
+      {showCostCalculator && currentScopeItem && (
+        <CostCalculator
+          isOpen={showCostCalculator}
+          onClose={() => setShowCostCalculator(false)}
+          item={currentScopeItem}
+          onCalculate={handleScopeItemCostCalculation}
+          taskTemplates={taskTemplates}
+          companySettings={companySettings}
+        />
+      )}
+
+      {/* Client Form */}
       {showClientForm && (
           <ClientForm
-            users={allUsers}
+          isOpen={showClientForm}
+          onClose={() => setShowClientForm(false)}
             onSave={handleSaveNewClient}
-            onCancel={() => setShowClientForm(false)}
+          clients={allClients}
           />
       )}
     </div>
@@ -1347,8 +1873,8 @@ Client Type: ${client?.tags?.join(', ') || 'General'}
 Scope of Work:
 ${toeData.scope_of_work || 'Not defined'}
 
-Fee Structure:
-${toeData.fee_structure?.map(item => `- ${item.description}: $${item.cost}`).join('\n') || 'Not defined'}
+Third Party Fees:
+${toeData.third_party_fees?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
 
 Assumptions:
 ${toeData.assumptions || 'Not defined'}
@@ -1360,7 +1886,7 @@ Please provide specific, actionable suggestions for:
 1. Scope clarity and completeness
 2. Risk mitigation through assumptions
 3. Important exclusions that should be considered
-4. Fee structure appropriateness
+4. Third party fees completeness and accuracy
 5. Overall document quality
 
 Format your response as structured suggestions, not as replacement content.`;
@@ -1506,7 +2032,7 @@ Format your response as structured suggestions, not as replacement content.`;
 
               {aiSuggestions.fee_suggestions?.length > 0 && (
                 <div>
-                  <h4 className="font-semibold mb-2">Fee Structure Suggestions</h4>
+                  <h4 className="font-semibold mb-2">Third Party Fees Suggestions</h4>
                   <ul className="space-y-2">
                     {aiSuggestions.fee_suggestions.map((suggestion, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -1544,3 +2070,5 @@ Format your response as structured suggestions, not as replacement content.`;
     </>
   );
 };
+
+

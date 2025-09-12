@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { FileText, CheckCircle, PenTool, Building2, Phone, Mail, MapPin, Download, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import SignatureModal from '../components/toe/SignatureModal';
@@ -146,6 +147,7 @@ export default function TOESign() {
   const [isSigning, setIsSigning] = useState(false);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isSigned, setIsSigned] = useState(false); // New state variable
+  const [hasReadTerms, setHasReadTerms] = useState(false); // Required checkbox for standard terms
 
   useEffect(() => {
     const loadTOE = async () => {
@@ -265,7 +267,8 @@ export default function TOESign() {
         project_title: toe.project_title,
         status: toe.status,
         scope_of_work: toe.scope_of_work,
-        fee_structure: toe.fee_structure,
+        staged_scope: toe.staged_scope,
+        third_party_fees: toe.third_party_fees,
         total_fee: toe.total_fee,
         total_fee_with_gst: toe.total_fee_with_gst,
         assumptions: toe.assumptions,
@@ -353,57 +356,156 @@ export default function TOESign() {
             <Card>
               <CardHeader><CardTitle>Scope of Work</CardTitle></CardHeader>
               <CardContent>
-                <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
-                  {toe.scope_of_work || 'No scope of work defined.'}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle>Fee Structure</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {toe.fee_structure && toe.fee_structure.length > 0 ? (
-                    <>
-                      <div className="space-y-3">
-                        {toe.fee_structure.map((item, index) => (
-                          <div key={index} className="flex justify-between items-start p-4 bg-gray-50 rounded-lg">
-                            <div className="flex-1">
-                              <p className="font-medium">{item.description}</p>
-                              {item.time_estimate && (
-                                <p className="text-sm text-gray-600 mt-1">Estimated time: {item.time_estimate}</p>
+                {toe.staged_scope && toe.staged_scope.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Main table header - only show once at the top */}
+                    <div className="overflow-x-auto shadow-sm">
+                      <table className="w-full border-collapse bg-white rounded-lg overflow-hidden">
+                        <thead>
+                          <tr style={{ backgroundColor: '#5E0F68' }}>
+                            <th className="px-6 py-4 text-left font-bold text-white text-sm uppercase tracking-wider">DESCRIPTION - LYSAGHT FEES</th>
+                            <th className="px-6 py-4 text-center font-bold text-white text-sm uppercase tracking-wider w-32">COST</th>
+                            <th className="px-6 py-4 text-center font-bold text-white text-sm uppercase tracking-wider w-32">TIME</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {toe.staged_scope.map((stage, stageIndex) => (
+                            <React.Fragment key={stageIndex}>
+                              {/* Stage header row */}
+                              {toe.staged_scope.length > 1 && (
+                                <tr className="bg-gray-500">
+                                  <td colSpan="3" className="px-6 py-3 text-white font-semibold text-sm">
+                                    {stage.stage_name || `STAGE ${stage.stage_number}`}
+                                  </td>
+                                </tr>
                               )}
-                            </div>
-                            <div className="text-right ml-4">
-                              <span className="font-semibold text-lg">{formatCurrency(item.cost)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="border-t pt-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>{formatCurrency(toe.total_fee)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>GST (15%):</span>
-                            <span>{formatCurrency(toe.total_fee_with_gst - toe.total_fee)}</span>
-                          </div>
-                          <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                            <span>Total (incl. GST):</span>
-                            <span>{formatCurrency(toe.total_fee_with_gst)}</span>
-                          </div>
+                              {/* Stage items */}
+                              {stage.scope_items && stage.scope_items.map((item, itemIndex) => (
+                                <tr key={`${stageIndex}-${itemIndex}`} className="hover:bg-gray-50 transition-colors duration-150">
+                                  <td className="px-6 py-4 text-gray-900">
+                                    <div className="font-medium text-gray-900">{item.description}</div>
+                                  </td>
+                                  <td className="px-6 py-4 text-center text-gray-900 font-medium">
+                                    {item.totalCost ? formatCurrency(item.totalCost) : '-'}
+                                  </td>
+                                  <td className="px-6 py-4 text-center text-gray-900 font-medium">
+                                    {item.time_estimate_weeks ? `${item.time_estimate_weeks} weeks` : '-'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {/* Scope of Work Totals */}
+                    <div className="bg-gray-50 rounded-lg p-6 mt-6 border border-gray-200">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Lysaght Fees Summary</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-gray-700 font-medium">Subtotal:</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(
+                              toe.staged_scope?.reduce((total, stage) => 
+                                total + (stage.scope_items?.reduce((stageTotal, item) => 
+                                  stageTotal + (item.totalCost || 0), 0) || 0), 0
+                              ) || 0
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-gray-700 font-medium">GST (15%):</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(
+                              (toe.staged_scope?.reduce((total, stage) => 
+                                total + (stage.scope_items?.reduce((stageTotal, item) => 
+                                  stageTotal + (item.totalCost || 0), 0) || 0), 0
+                              ) || 0) * 0.15
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 pt-4 border-t border-gray-300">
+                          <span className="text-lg font-bold text-gray-900">Total Lysaght Fees (incl. GST):</span>
+                          <span className="text-lg font-bold text-gray-900">
+                            {formatCurrency(
+                              (toe.staged_scope?.reduce((total, stage) => 
+                                total + (stage.scope_items?.reduce((stageTotal, item) => 
+                                  stageTotal + (item.totalCost || 0), 0) || 0), 0
+                              ) || 0) * 1.15
+                            )}
+                          </span>
                         </div>
                       </div>
-                    </>
-                  ) : (
-                    <p className="text-gray-500 italic">No fee structure defined.</p>
-                  )}
-                </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap text-gray-700 leading-relaxed">
+                    {toe.scope_of_work || 'No scope of work defined.'}
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Third Party Fees - Only show if there are fees */}
+            {toe.third_party_fees && toe.third_party_fees.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle>Third Party Fees</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto shadow-sm">
+                      <table className="w-full border-collapse bg-white rounded-lg overflow-hidden">
+                        <thead>
+                          <tr style={{ backgroundColor: '#5E0F68' }}>
+                            <th className="px-6 py-4 text-left font-bold text-white text-sm uppercase tracking-wider">DESCRIPTION</th>
+                            <th className="px-6 py-4 text-center font-bold text-white text-sm uppercase tracking-wider w-32">COST</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {toe.third_party_fees.map((item, index) => (
+                            <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
+                              <td className="px-6 py-4 text-gray-900">
+                                <div className="font-medium text-gray-900">{item.description}</div>
+                                {item.third_party_entity && (
+                                  <div className="text-sm text-gray-500 mt-1">Entity: {item.third_party_entity}</div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-center text-gray-900 font-medium">
+                                {formatCurrency(item.fee_amount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="bg-gray-50 rounded-lg p-6 mt-6 border border-gray-200">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">Third Party Fees Summary</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-gray-700 font-medium">Subtotal:</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(toe.third_party_fees.reduce((sum, item) => sum + (item.fee_amount || 0), 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-gray-700 font-medium">GST (15%):</span>
+                          <span className="text-gray-900 font-semibold">
+                            {formatCurrency(toe.third_party_fees.reduce((sum, item) => sum + (item.fee_amount || 0), 0) * 0.15)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center py-3 pt-4 border-t border-gray-300">
+                          <span className="text-lg font-bold text-gray-900">Total (incl. GST):</span>
+                          <span className="text-lg font-bold text-gray-900">
+                            {formatCurrency(toe.third_party_fees.reduce((sum, item) => sum + (item.fee_amount || 0), 0) * 1.15)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {toe.assumptions && (
               <Card>
@@ -550,9 +652,26 @@ export default function TOESign() {
                         />
                       </div>
 
+                      <div className="flex items-start space-x-3 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <Checkbox
+                          id="hasReadTerms"
+                          checked={hasReadTerms}
+                          onCheckedChange={(checked) => setHasReadTerms(checked)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <Label htmlFor="hasReadTerms" className="text-sm font-medium text-gray-700 cursor-pointer">
+                            I have read and agree to the Standard Terms & Conditions outlined in this document *
+                          </Label>
+                          <p className="text-xs text-gray-500 mt-1">
+                            You must read and accept the terms before signing this document.
+                          </p>
+                        </div>
+                      </div>
+
                       <Button
                         onClick={() => setShowSignatureModal(true)}
-                        disabled={isSigning || !clientName.trim()}
+                        disabled={isSigning || !clientName.trim() || !hasReadTerms}
                         size="lg"
                         className="w-full"
                         style={{ backgroundColor: '#5E0F68' }}

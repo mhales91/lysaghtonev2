@@ -174,6 +174,8 @@ export async function generateTOEPDFClient(payload) {
     const exclusions = payload.exclusions;
     const client = payload.client || {};
     const fee_structure = payload.fee_structure || [];
+    const staged_scope = payload.staged_scope || [];
+    const third_party_fees = payload.third_party_fees || [];
     const total_fee_with_gst = Number(payload.total_fee_with_gst || 0);
     const total_fee = Number(payload.total_fee || 0);
     const signatureRecord = payload.signatureRecord || null;
@@ -192,7 +194,7 @@ export async function generateTOEPDFClient(payload) {
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     // Define colors - matching your reference
-    const purple = rgb(0.4, 0.2, 0.6); // Purple for headings
+    const purple = rgb(94/255, 15/255, 104/255); // Purple #5E0F68 for headings
     const black = rgb(0, 0, 0);
     const darkGray = rgb(0.3, 0.3, 0.3);
     const lightGray = rgb(0.8, 0.8, 0.8);
@@ -508,15 +510,20 @@ export async function generateTOEPDFClient(payload) {
     }
     currentY -= 20;
 
-    // FEE STRUCTURE - Perfect table layout
-    currentY = addSectionHeading(page, 'FEE STRUCTURE', 60, currentY);
-    currentY -= 40; // Even more space between heading and table
+    // SCOPE OF SERVICES AND FEE PROPOSAL - List format with proper headers
+    currentY = addSectionHeading(page, 'SCOPE OF SERVICES AND FEE PROPOSAL', 60, currentY);
+    currentY -= 20;
+    
+    // Add subtitle
+    currentY = drawWrappedText(page, 'Our estimate of the costs to complete the project is detailed below.', 60, currentY, width - 120, 12);
+    currentY -= 30;
 
-    if (fee_structure.length > 0) {
-      // Table header with purple background - Match text width
-      const tableWidth = width - 120; // Match the text width (same as content)
-      const tableX = 60; // Align with text content
+    if (staged_scope.length > 0) {
+      // Add table headers
+      const tableWidth = width - 120;
+      const tableX = 60;
       
+      // Header background
       page.drawRectangle({
         x: tableX,
         y: currentY - 25,
@@ -525,16 +532,152 @@ export async function generateTOEPDFClient(payload) {
         color: purple,
       });
 
-      // Header text - properly positioned
+      // Header text
       page.drawText('DESCRIPTION', {
         x: tableX + 15,
         y: currentY - 18,
-        size: 12,
+        size: 11,
         font: helveticaBold,
         color: rgb(1, 1, 1),
       });
 
-      page.drawText('ESTIMATE', {
+      page.drawText('COST', {
+        x: tableX + tableWidth - 120,
+        y: currentY - 18,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      page.drawText('TIME', {
+        x: tableX + tableWidth - 60,
+        y: currentY - 18,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      currentY -= 40;
+
+      // Process all stages with fresh numbering
+      let itemNumber = 1;
+      let totalLysaghtFees = 0;
+      
+      for (const stage of staged_scope) {
+        // Process stage items
+        if (stage.scope_items && stage.scope_items.length > 0) {
+          for (const item of stage.scope_items) {
+            const description = item.description || 'Service';
+            const cost = item.totalCost ? `$${Number(item.totalCost).toFixed(2)}` : 'TBD';
+            const time = item.time_estimate_weeks ? `${item.time_estimate_weeks} weeks` : 'TBD';
+            
+            // Add to total
+            if (item.totalCost) {
+              totalLysaghtFees += Number(item.totalCost);
+            }
+            
+            // Draw item number and title with proper wrapping
+            const itemTitle = `${itemNumber}. ${description}`;
+            const maxDescriptionWidth = tableWidth - 180; // Leave space for cost and time columns
+            
+            // Use drawWrappedText for proper text wrapping
+            const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+            const startY = currentY;
+            
+            // Draw each line of the description
+            for (let i = 0; i < wrappedLines.length; i++) {
+              page.drawText(wrappedLines[i], {
+                x: tableX + 15,
+                y: currentY,
+                size: 11,
+                font: helveticaBold,
+                color: black,
+              });
+              currentY -= 14; // Reduced line spacing for 11pt text
+            }
+            
+            // Draw cost and time on the right side, aligned with first line
+            const costWidth = helvetica.widthOfTextAtSize(cost, 11);
+            const timeWidth = helvetica.widthOfTextAtSize(time, 11);
+            
+            page.drawText(cost, {
+              x: tableX + tableWidth - 120,
+              y: startY,
+              size: 11,
+              font: helveticaBold,
+              color: black,
+            });
+            
+            page.drawText(time, {
+              x: tableX + tableWidth - 60,
+              y: startY,
+              size: 11,
+              font: helveticaBold,
+              color: black,
+            });
+            
+            currentY -= 15; // Reduced space after each item
+            itemNumber++;
+          }
+        }
+      }
+
+      // Add total section
+      currentY -= 20;
+      page.drawRectangle({
+        x: tableX,
+        y: currentY - 20,
+        width: tableWidth,
+        height: 20,
+        color: rgb(0.5, 0.5, 0.5), // Grey background
+      });
+
+      const gst = totalLysaghtFees * 0.15;
+      const totalWithGst = totalLysaghtFees + gst;
+
+      page.drawText('TOTAL', {
+        x: tableX + 15,
+        y: currentY - 15,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      const totalText = `$${totalWithGst.toFixed(2)} + GST`;
+      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      page.drawText(totalText, {
+        x: tableX + tableWidth - 60,
+        y: currentY - 15,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      currentY -= 40;
+    } else if (fee_structure.length > 0) {
+      // Fallback to old fee structure if no staged scope
+      const tableWidth = width - 120;
+      const tableX = 60;
+      
+      // Header background
+      page.drawRectangle({
+        x: tableX,
+        y: currentY - 25,
+        width: tableWidth,
+        height: 25,
+        color: purple,
+      });
+
+      // Header text
+      page.drawText('DESCRIPTION', {
+        x: tableX + 15,
+        y: currentY - 18,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      page.drawText('COST', {
         x: tableX + tableWidth - 80,
         y: currentY - 18,
         size: 12,
@@ -542,72 +685,78 @@ export async function generateTOEPDFClient(payload) {
         color: rgb(1, 1, 1),
       });
 
-      currentY -= 40; // More space between header and first data row
+      currentY -= 40;
 
-      // Fee items - Clean layout with proper multi-line handling
-      const processedItems = new Set(); // Track processed items to prevent duplicates
+      let itemNumber = 1;
+      let totalFees = 0;
+      
       for (const item of fee_structure) {
         const description = item.description || 'Service';
         const cost = `$${Number(item.cost || 0).toFixed(2)}`;
         
-        // Create a unique key for this item to prevent duplicates
-        const itemKey = `${description}-${cost}`;
-        if (processedItems.has(itemKey)) {
-          continue; // Skip duplicate items
-        }
-        processedItems.add(itemKey);
+        // Add to total
+        totalFees += Number(item.cost || 0);
         
-        // Handle multi-line descriptions by splitting on newlines
-        const descriptionLines = description.split('\n').filter(line => line.trim());
+        // Draw item with proper wrapping
+        const itemTitle = `${itemNumber}. ${description}`;
+        const maxDescriptionWidth = tableWidth - 100; // Leave space for cost column
         
-        // Draw each description line with proper spacing
-        for (let i = 0; i < descriptionLines.length; i++) {
-          const line = descriptionLines[i].trim();
-          page.drawText(line, {
+        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+        const startY = currentY;
+        
+        for (let i = 0; i < wrappedLines.length; i++) {
+          page.drawText(wrappedLines[i], {
             x: tableX + 15,
             y: currentY,
-            size: 12,
-            font: helvetica,
+            size: 11,
+            font: helveticaBold,
             color: black,
           });
-          
-          // Only draw cost on the first line of multi-line descriptions
-          if (i === 0) {
-            page.drawText(cost, {
-              x: tableX + tableWidth - 80,
-              y: currentY,
-              size: 12,
-              font: helvetica,
-              color: black,
-            });
-          }
-          
-          // Move to next line with proper spacing
-          currentY -= 16; // Increased spacing between lines
+          currentY -= 14; // Reduced line spacing for 11pt text
         }
         
-        // Add extra space after each fee item
-        currentY -= 4;
+        const costWidth = helvetica.widthOfTextAtSize(cost, 11);
+        page.drawText(cost, {
+          x: tableX + tableWidth - 80,
+          y: startY,
+          size: 11,
+          font: helveticaBold,
+          color: black,
+        });
+        
+        currentY -= 15; // Reduced space after each item
+        itemNumber++;
       }
 
-      // Total row - Bold and properly aligned
+      // Add total
+      currentY -= 20;
+      page.drawRectangle({
+        x: tableX,
+        y: currentY - 20,
+        width: tableWidth,
+        height: 20,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+
       page.drawText('TOTAL', {
         x: tableX + 15,
-        y: currentY,
-        size: 12,
+        y: currentY - 15,
+        size: 11,
         font: helveticaBold,
-        color: black,
+        color: rgb(1, 1, 1),
       });
 
-      page.drawText(`$${total_fee.toFixed(2)} + GST`, {
+      const totalText = `$${totalFees.toFixed(2)} + GST`;
+      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      page.drawText(totalText, {
         x: tableX + tableWidth - 80,
-        y: currentY,
-        size: 12,
+        y: currentY - 15,
+        size: 11,
         font: helveticaBold,
-        color: black,
+        color: rgb(1, 1, 1),
       });
 
-      currentY -= 30;
+      currentY -= 40;
     } else {
       currentY = drawWrappedText(page, 'No fee structure defined.', 60, currentY, width - 120, 12);
       currentY -= 20;
@@ -648,7 +797,141 @@ export async function generateTOEPDFClient(payload) {
 
     await addFooter(page, pageNumber++);
 
-    // PAGES 4-8: Standard Terms
+    // PAGE 4: Third Party Fees (only if fees exist)
+    if (third_party_fees.length > 0) {
+      page = pdfDoc.addPage([width, height]);
+      currentY = height - 80;
+
+      currentY = addSectionHeading(page, 'THIRD PARTY FEES', 60, currentY);
+      currentY -= 20;
+      
+      // Add subtitle
+      currentY = drawWrappedText(page, 'The following third party fees are estimates and will be charged directly by the respective organizations.', 60, currentY, width - 120, 12);
+      currentY -= 30;
+
+      // Add table headers
+      const tableWidth = width - 120;
+      const tableX = 60;
+      
+      // Header background
+      page.drawRectangle({
+        x: tableX,
+        y: currentY - 25,
+        width: tableWidth,
+        height: 25,
+        color: purple,
+      });
+
+      // Header text
+      page.drawText('DESCRIPTION', {
+        x: tableX + 15,
+        y: currentY - 18,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      page.drawText('COST', {
+        x: tableX + tableWidth - 80,
+        y: currentY - 18,
+        size: 12,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      currentY -= 40;
+
+      // Process third party fees with fresh numbering
+      let itemNumber = 1;
+      let totalThirdPartyFees = 0;
+      
+      for (const item of third_party_fees) {
+        const description = item.description || 'Third Party Service';
+        const cost = `$${Number(item.fee_amount || 0).toFixed(2)}`;
+        
+        // Add to total
+        totalThirdPartyFees += Number(item.fee_amount || 0);
+        
+        // Draw item number and title with proper wrapping
+        const itemTitle = `${itemNumber}. ${description}`;
+        const maxDescriptionWidth = tableWidth - 100; // Leave space for cost column
+        
+        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+        const startY = currentY;
+        
+        // Draw each line of the description
+        for (let i = 0; i < wrappedLines.length; i++) {
+          page.drawText(wrappedLines[i], {
+            x: tableX + 15,
+            y: currentY,
+            size: 11,
+            font: helveticaBold,
+            color: black,
+          });
+          currentY -= 14; // Reduced line spacing for 11pt text
+        }
+        
+        // Draw cost on the right side, aligned with first line
+        const costWidth = helvetica.widthOfTextAtSize(cost, 11);
+        page.drawText(cost, {
+          x: tableX + tableWidth - 80,
+          y: startY,
+          size: 11,
+          font: helveticaBold,
+          color: black,
+        });
+        
+        // Add entity info if available
+        if (item.third_party_entity) {
+          currentY -= 8;
+          page.drawText(`Entity: ${item.third_party_entity}`, {
+            x: tableX + 15,
+            y: currentY,
+            size: 9,
+            font: helvetica,
+            color: rgb(0.5, 0.5, 0.5),
+          });
+        }
+        
+        currentY -= 15; // Reduced space after each item
+        itemNumber++;
+      }
+
+      // Add total section
+      currentY -= 20;
+      page.drawRectangle({
+        x: tableX,
+        y: currentY - 20,
+        width: tableWidth,
+        height: 20,
+        color: rgb(0.5, 0.5, 0.5), // Grey background
+      });
+
+      const thirdPartyGst = totalThirdPartyFees * 0.15;
+      const thirdPartyTotalWithGst = totalThirdPartyFees + thirdPartyGst;
+
+      page.drawText('TOTAL', {
+        x: tableX + 15,
+        y: currentY - 15,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      const totalText = `$${thirdPartyTotalWithGst.toFixed(2)} + GST`;
+      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      page.drawText(totalText, {
+        x: tableX + tableWidth - 80,
+        y: currentY - 15,
+        size: 11,
+        font: helveticaBold,
+        color: rgb(1, 1, 1),
+      });
+
+      await addFooter(page, pageNumber++);
+    }
+
+    // PAGES 5-9: Standard Terms
     const standardTermsLines = STANDARD_TERMS.split('\n');
     let termsPage = pdfDoc.addPage([width, height]);
     let termsY = height - 80;

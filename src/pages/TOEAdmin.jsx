@@ -13,17 +13,53 @@ import { Plus, Edit, Trash2, Search, FileText } from 'lucide-react';
 
 const LibraryItemForm = ({ item, onSave, onCancel }) => {
   const [formData, setFormData] = useState({
-    title: item?.title || '',
+    name: item?.name || item?.title || '', // Map title to name for database
+    title: item?.title || item?.name || '', // Keep title for display
     category: item?.category || 'scope',
     content: item?.content || '',
     tags: item?.tags?.join(', ') || '',
+    department: item?.department || 'Planning',
+    third_party_entity: item?.third_party_entity || '',
+    fee_amount: item?.fee_amount || '',
     is_active: item?.is_active !== undefined ? item.is_active : true
   });
+
+  // Update form data when item prop changes (for editing)
+  useEffect(() => {
+    if (item) {
+      setFormData({
+        name: item.name || item.title || '',
+        title: item.title || item.name || '',
+        category: item.category || 'scope',
+        content: item.content || '',
+        tags: item.tags?.join(', ') || '',
+        department: item.department || 'Planning',
+        third_party_entity: item.third_party_entity || '',
+        fee_amount: item.fee_amount || '',
+        is_active: item.is_active !== undefined ? item.is_active : true
+      });
+    } else {
+      // Reset form for new item
+      setFormData({
+        name: '',
+        title: '',
+        category: 'scope',
+        content: '',
+        tags: '',
+        department: 'Planning',
+        third_party_entity: '',
+        fee_amount: '',
+        is_active: true
+      });
+    }
+  }, [item]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const submitData = {
       ...formData,
+      name: formData.title, // Ensure name field is populated from title
+      fee_amount: formData.fee_amount ? parseFloat(formData.fee_amount) : null, // Convert to number or null
       tags: formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(Boolean) : []
     };
     onSave(submitData);
@@ -42,7 +78,7 @@ const LibraryItemForm = ({ item, onSave, onCancel }) => {
               <Input 
                 id="title" 
                 value={formData.title} 
-                onChange={(e) => setFormData({...formData, title: e.target.value})} 
+                onChange={(e) => setFormData({...formData, title: e.target.value, name: e.target.value})} 
                 required 
               />
             </div>
@@ -59,10 +95,58 @@ const LibraryItemForm = ({ item, onSave, onCancel }) => {
                   <SelectItem value="scope">Scope Items</SelectItem>
                   <SelectItem value="assumption">Assumptions</SelectItem>
                   <SelectItem value="exclusion">Exclusions</SelectItem>
+                  <SelectItem value="third_party_fee">Third Party Fees</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
+          
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="department">Department</Label>
+              <Select 
+                value={formData.department} 
+                onValueChange={(val) => setFormData({...formData, department: val})}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Planning">Planning</SelectItem>
+                  <SelectItem value="Engineering">Engineering</SelectItem>
+                  <SelectItem value="Surveying">Surveying</SelectItem>
+                  <SelectItem value="Project Management">Project Management</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {formData.category === 'third_party_fee' && (
+              <div className="space-y-2">
+                <Label htmlFor="third_party_entity">Third Party Entity</Label>
+                <Input 
+                  id="third_party_entity" 
+                  value={formData.third_party_entity} 
+                  onChange={(e) => setFormData({...formData, third_party_entity: e.target.value})} 
+                  placeholder="e.g. Tauranga City Council, Powerco, etc."
+                />
+              </div>
+            )}
+          </div>
+
+          {formData.category === 'third_party_fee' && (
+            <div className="space-y-2">
+              <Label htmlFor="fee_amount">Fee Amount (NZD)</Label>
+              <Input 
+                id="fee_amount" 
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.fee_amount} 
+                onChange={(e) => setFormData({...formData, fee_amount: e.target.value})} 
+                placeholder="e.g. 886.00"
+              />
+            </div>
+          )}
           
           <div className="space-y-2">
             <Label htmlFor="content">Content</Label>
@@ -231,6 +315,7 @@ export default function TOEAdmin() {
                   <SelectItem value="scope">Scope Items</SelectItem>
                   <SelectItem value="assumption">Assumptions</SelectItem>
                   <SelectItem value="exclusion">Exclusions</SelectItem>
+                  <SelectItem value="third_party_fee">Third Party Fees</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -243,9 +328,10 @@ export default function TOEAdmin() {
             <TabsTrigger value="scope">Scope Items ({libraryItems.filter(i => i.category === 'scope').length})</TabsTrigger>
             <TabsTrigger value="assumption">Assumptions ({libraryItems.filter(i => i.category === 'assumption').length})</TabsTrigger>
             <TabsTrigger value="exclusion">Exclusions ({libraryItems.filter(i => i.category === 'exclusion').length})</TabsTrigger>
+            <TabsTrigger value="third_party_fee">Third Party Fees ({libraryItems.filter(i => i.category === 'third_party_fee').length})</TabsTrigger>
           </TabsList>
           
-          {['scope', 'assumption', 'exclusion'].map(category => (
+          {['scope', 'assumption', 'exclusion', 'third_party_fee'].map(category => (
             <TabsContent key={category} value={category}>
               <Card>
                 <CardContent>
@@ -257,6 +343,9 @@ export default function TOEAdmin() {
                         <TableRow>
                           <TableHead>Title</TableHead>
                           <TableHead>Content Preview</TableHead>
+                          <TableHead>Department</TableHead>
+                          {category === 'third_party_fee' && <TableHead>Third Party Entity</TableHead>}
+                          {category === 'third_party_fee' && <TableHead>Fee Amount</TableHead>}
                           <TableHead>Tags</TableHead>
                           <TableHead>Usage</TableHead>
                           <TableHead>Status</TableHead>
@@ -266,12 +355,21 @@ export default function TOEAdmin() {
                       <TableBody>
                         {filteredItems.filter(item => item.category === category).map(item => (
                           <TableRow key={item.id}>
-                            <TableCell className="font-medium">{item.title}</TableCell>
+                            <TableCell className="font-medium">{item.title || item.name}</TableCell>
                             <TableCell className="max-w-md">
                               <div className="truncate text-sm text-gray-600">
                                 {item.content}
                               </div>
                             </TableCell>
+                            <TableCell>{item.department || 'Planning'}</TableCell>
+                            {category === 'third_party_fee' && (
+                              <TableCell>{item.third_party_entity || '-'}</TableCell>
+                            )}
+                            {category === 'third_party_fee' && (
+                              <TableCell>
+                                {item.fee_amount ? `$${parseFloat(item.fee_amount).toFixed(2)}` : '-'}
+                              </TableCell>
+                            )}
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
                                 {item.tags?.slice(0, 3).map(tag => (
@@ -316,8 +414,8 @@ export default function TOEAdmin() {
                   {!isLoading && filteredItems.filter(item => item.category === category).length === 0 && (
                     <div className="text-center py-8 text-gray-500">
                       <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                      <p>No {category} items found</p>
-                      <p className="text-sm">Create your first {category} item to get started</p>
+                      <p>No {category === 'third_party_fee' ? 'third party fee' : category} items found</p>
+                      <p className="text-sm">Create your first {category === 'third_party_fee' ? 'third party fee' : category} item to get started</p>
                     </div>
                   )}
                 </CardContent>
