@@ -640,10 +640,17 @@ The summary should be compelling and help the client understand exactly what the
   };
 
   const getDisplayedThirdPartyFees = () => {
-    return showPreReviewVersion && hasPreReviewVersion
+    const fees = showPreReviewVersion && hasPreReviewVersion
       ? toe.pre_review_version.fee_structure || []
       : formData.fee_structure;
-  }
+    
+    // Handle both old and new data structures
+    return fees.map(item => ({
+      ...item,
+      fee_amount: item.fee_amount || item.cost || 0, // Support both old 'cost' and new 'fee_amount'
+      description: item.description || ''
+    }));
+  };
 
   const calculateDisplayedTotals = () => {
     const displayedThirdPartyFees = getDisplayedThirdPartyFees();
@@ -1724,8 +1731,8 @@ The summary should be compelling and help the client understand exactly what the
                       <div className="space-y-3">
                         {getDisplayedThirdPartyFees().map((item, index) => (
                           <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
-                            <span className="text-sm">{item.description}</span>
-                            <span className="font-medium">${item.fee_amount.toLocaleString()}</span>
+                            <span className="text-sm">{item?.description || ''}</span>
+                            <span className="font-medium">${((item?.fee_amount) || 0).toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
@@ -1799,7 +1806,7 @@ The summary should be compelling and help the client understand exactly what the
       </Card>
 
       {/* Signature Modal */}
-      {showSignatureModal && lysaghtSignatureRecord && (
+      {showSignatureModal && (
         <SignatureModal
           isOpen={showSignatureModal}
           onClose={() => setShowSignatureModal(false)}

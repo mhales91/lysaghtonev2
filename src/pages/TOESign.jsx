@@ -340,19 +340,70 @@ export default function TOESign() {
 
   return (
     <div className="bg-gray-100 py-12 px-4 md:px-8">
-      <Card className="max-w-5xl mx-auto shadow-lg">
+      <Card className="max-w-7xl mx-auto shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl font-bold text-gray-900 mb-2">{toe.project_title}</CardTitle>
-          <div className="flex items-center gap-4">
-            <Badge className={`${toe.status === 'signed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-              {isSigned ? 'Signed' : 'Awaiting Signature'}
-            </Badge>
-            <span className="text-sm text-gray-500">Version {toe.version}</span>
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <CardTitle className="text-3xl font-bold text-gray-900 mb-2">{toe.project_title}</CardTitle>
+              <div className="flex items-center gap-4">
+                <Badge className={`${toe.status === 'signed' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                  {isSigned ? 'Signed' : 'Awaiting Signature'}
+                </Badge>
+                <span className="text-sm text-gray-500">Version {toe.version}</span>
+              </div>
+            </div>
+            
+            {/* Top Right: Download Button Only */}
+            <Button variant="outline" onClick={handleDownload} disabled={isGeneratingPDF} className="flex items-center gap-2">
+              {isGeneratingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Download Copy
+            </Button>
           </div>
         </CardHeader>
-        <CardContent className="p-6 md:p-8 grid md:grid-cols-3 gap-8">
-          {/* LEFT: content */}
-          <div className="md:col-span-2 space-y-8">
+        <CardContent className="p-6 md:p-8">
+          {/* Main content - full width */}
+          <div className="space-y-8">
+            {/* Client Information - Full Width Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="w-5 h-5" />
+                  Client Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {client ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div>
+                      <h3 className="font-semibold text-lg text-gray-900">{client.company_name}</h3>
+                      <p className="text-gray-600">{client.contact_person}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm text-gray-600">{client.email}</span>
+                    </div>
+                    {client.phone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{client.phone}</span>
+                      </div>
+                    )}
+                    {client.address && (
+                      <div className="flex items-start gap-2">
+                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
+                        <div className="text-sm text-gray-600">
+                          {client.address.street && <div>{client.address.street}</div>}
+                          {client.address.city && <div>{client.address.city} {client.address.postcode}</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 italic">No client information available</p>
+                )}
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader><CardTitle>Scope of Work</CardTitle></CardHeader>
               <CardContent>
@@ -691,74 +742,6 @@ export default function TOESign() {
               </Card>
             </div>
           </div>
-
-          {/* RIGHT: sidebar */}
-          <aside className="md:col-span-1 space-y-6">
-            {client ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
-                    Client Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-lg">{client.company_name}</h3>
-                    <p className="text-gray-600">{client.contact_person}</p>
-                  </div>
-                  <div className="grid md:grid-cols-1 gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-gray-400" />
-                      <span>{client.email}</span>
-                    </div>
-                    {client.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span>{client.phone}</span>
-                      </div>
-                    )}
-                    {client.address && (
-                      <div className="flex items-start gap-2">
-                        <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                        <div>
-                          {client.address.street && <div>{client.address.street}</div>}
-                          {client.address.city && <div>{client.address.city} {client.address.postcode}</div>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="w-5 h-5" />
-                    Client Information
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-500 italic">No client information available</p>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Download className="w-4 h-4" />
-                  Document Actions
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Button className="w-full" variant="outline" onClick={handleDownload} disabled={isGeneratingPDF}>
-                  {isGeneratingPDF ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                  Download Copy
-                </Button>
-              </CardContent>
-            </Card>
-          </aside>
         </CardContent>
       </Card>
 
