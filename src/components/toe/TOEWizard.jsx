@@ -66,7 +66,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
       }
     ],
     use_staged_scope: true, // Always use staged scope
-    third_party_fees: toe?.third_party_fees || [
+    fee_structure: toe?.fee_structure || [
       {
         id: crypto.randomUUID(),
         description: '',
@@ -180,22 +180,22 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   };
 
   const handleThirdPartyFeeChange = (index, field, value) => {
-    const newThirdPartyFees = [...formData.third_party_fees];
+    const newThirdPartyFees = [...formData.fee_structure];
     newThirdPartyFees[index] = {
       ...newThirdPartyFees[index],
       [field]: field === 'fee_amount' ? parseFloat(value) || 0 : value
     };
     setFormData(prev => ({
       ...prev,
-      third_party_fees: newThirdPartyFees
+      fee_structure: newThirdPartyFees
     }));
   };
 
   const addThirdPartyFeeItem = () => {
     setFormData(prev => ({
       ...prev,
-      third_party_fees: [
-        ...prev.third_party_fees,
+      fee_structure: [
+        ...prev.fee_structure,
         {
           id: crypto.randomUUID(),
           description: '',
@@ -210,7 +210,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const removeThirdPartyFeeItem = (index) => {
     setFormData(prev => ({
       ...prev,
-      third_party_fees: prev.third_party_fees.filter((_, i) => i !== index)
+      fee_structure: prev.fee_structure.filter((_, i) => i !== index)
     }));
   };
 
@@ -225,7 +225,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     
     setFormData(prev => ({
       ...prev,
-      third_party_fees: [...prev.third_party_fees, newItem]
+      fee_structure: [...prev.fee_structure, newItem]
     }));
     
     // Update usage count
@@ -391,17 +391,6 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
     
     const matchesCategory = item.category === librarySearch.category;
     
-    // Debug logging
-    console.log('Filtering item:', {
-      name: item.name,
-      department: item.department,
-      searchDepartment: librarySearch.department,
-      matchesDepartment,
-      matchesCategory,
-      category: item.category,
-      searchCategory: librarySearch.category
-    });
-    
     return matchesQuery && matchesDepartment && matchesCategory;
   });
 
@@ -416,7 +405,7 @@ export default function TOEWizard({ toe, clients, users, onSave, onCancel }) {
   const availableDepartments = [...new Set([...defaultDepartments, ...libraryDepartments])].sort();
 
   const calculateTotals = () => {
-    const subtotal = formData.third_party_fees.reduce((sum, item) => sum + (item.fee_amount || 0), 0);
+    const subtotal = formData.fee_structure.reduce((sum, item) => sum + (item.fee_amount || 0), 0);
     const gst = subtotal * (companySettings?.tax_rate || 0.15);
     const total = subtotal + gst;
     return { subtotal, gst, total };
@@ -452,7 +441,7 @@ SCOPE OF WORK:
 ${formData.scope_of_work || 'Not defined'}
 
 FEE STRUCTURE:
-${formData.third_party_fees?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
+${formData.fee_structure?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
 
 ASSUMPTIONS:
 ${formData.assumptions || 'Not defined'}
@@ -526,25 +515,16 @@ The summary should be compelling and help the client understand exactly what the
     try {
       const { subtotal, total } = calculateTotals();
       
-      // Only validate project summary if we're not saving as draft
-      // Project summary validation should only be required when finalizing
-      // const summaryValidation = validateProjectSummary();
-      // if (!summaryValidation.isValid) {
-      //   toast.error(summaryValidation.message);
-      //   setIsSaving(false);
-      //   return;
-      // }
-      
       // Clean and validate the data before sending
       const submitData = {
-        client_id: formData.client_id,
+        client_id: formData.client_id || null, // Convert empty string to null
         project_title: formData.project_title?.trim(),
         client_name: formData.client_name?.trim(),
         site_address: formData.site_address?.trim(),
         scope_of_work: formData.scope_of_work?.trim(),
         staged_scope: formData.staged_scope,
         use_staged_scope: formData.use_staged_scope,
-        third_party_fees: formData.third_party_fees.filter(item => 
+        fee_structure: formData.fee_structure.filter(item => 
           item.description?.trim() || item.fee_amount > 0
         ),
         assumptions: formData.assumptions?.trim(),
@@ -557,11 +537,16 @@ The summary should be compelling and help the client understand exactly what the
         status: 'draft'
       };
 
-      // Validate required fields
-      if (!submitData.client_id || !submitData.project_title) {
-        toast.error('Please fill in all required fields (Client and Project Title)');
+      // Validate required fields - only require project title for draft saves
+      if (!submitData.project_title?.trim()) {
+        toast.error('Please enter a project title');
         setIsSaving(false);
         return;
+      }
+
+      // Optional: Show a warning if client is not selected but allow saving
+      if (!submitData.client_id) {
+        toast.warning('No client selected - you can add this later');
       }
 
       await onSave(submitData, { reviewers });
@@ -656,8 +641,8 @@ The summary should be compelling and help the client understand exactly what the
 
   const getDisplayedThirdPartyFees = () => {
     return showPreReviewVersion && hasPreReviewVersion
-      ? toe.pre_review_version.third_party_fees || []
-      : formData.third_party_fees;
+      ? toe.pre_review_version.fee_structure || []
+      : formData.fee_structure;
   }
 
   const calculateDisplayedTotals = () => {
@@ -696,13 +681,13 @@ The summary should be compelling and help the client understand exactly what the
   };
 
   const reorderThirdPartyFees = (startIndex, endIndex) => {
-    const result = Array.from(formData.third_party_fees);
+    const result = Array.from(formData.fee_structure);
     const [removed] = result.splice(startIndex, 1);
     result.splice(endIndex, 0, removed);
     
     setFormData(prev => ({
       ...prev,
-      third_party_fees: result
+      fee_structure: result
     }));
   };
 
@@ -1874,7 +1859,7 @@ Scope of Work:
 ${toeData.scope_of_work || 'Not defined'}
 
 Third Party Fees:
-${toeData.third_party_fees?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
+${toeData.fee_structure?.map(item => `- ${item.description}: $${item.fee_amount}`).join('\n') || 'Not defined'}
 
 Assumptions:
 ${toeData.assumptions || 'Not defined'}

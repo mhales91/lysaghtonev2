@@ -192,6 +192,9 @@ export async function generateTOEPDFClient(payload) {
     // Load fonts
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const calibri = await pdfDoc.embedFont(StandardFonts.Helvetica); // Using Helvetica as Calibri substitute
+    const calibriBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold); // Using HelveticaBold as Calibri Bold substitute
+    const gotham = await pdfDoc.embedFont(StandardFonts.HelveticaBold); // Using HelveticaBold as Gotham substitute
 
     // Define colors - matching your reference
     const purple = rgb(94/255, 15/255, 104/255); // Purple #5E0F68 for headings
@@ -338,12 +341,12 @@ export async function generateTOEPDFClient(payload) {
     };
 
     // Helper function to add section heading
-    const addSectionHeading = (page, text, x, y, fontSize = 16) => {
+    const addSectionHeading = (page, text, x, y, fontSize = 10) => {
       page.drawText(text, {
         x,
         y,
         size: fontSize,
-        font: helveticaBold,
+        font: gotham,
         color: purple,
       });
       return y - (fontSize + 10);
@@ -386,7 +389,7 @@ export async function generateTOEPDFClient(payload) {
         x: 60, // Left-aligned instead of centered
         y: currentY,
         size: titleSize,
-        font: helveticaBold,
+        font: calibriBold,
         color: purple,
       });
       currentY -= (titleSize + 5);
@@ -419,8 +422,8 @@ export async function generateTOEPDFClient(payload) {
       page.drawText(line, {
         x: metadataX,
         y: projectNameY,
-        size: 12,
-        font: helveticaBold,
+        size: 11,
+        font: calibriBold,
         color: black,
       });
       projectNameY -= 15;
@@ -441,8 +444,8 @@ export async function generateTOEPDFClient(payload) {
       page.drawText(line, {
         x: metadataX,
         y: clientNameY,
-        size: 12,
-        font: helveticaBold,
+        size: 11,
+        font: calibriBold,
         color: black,
       });
       clientNameY -= 15;
@@ -485,7 +488,7 @@ export async function generateTOEPDFClient(payload) {
       page.drawText(info, {
         x: 60,
         y: currentY,
-        size: 12,
+        size: 11,
         font: helvetica,
         color: black,
       });
@@ -537,7 +540,7 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 18,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -545,7 +548,7 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + tableWidth - 120,
         y: currentY - 18,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -553,7 +556,7 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + tableWidth - 60,
         y: currentY - 18,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -581,7 +584,7 @@ export async function generateTOEPDFClient(payload) {
             const maxDescriptionWidth = tableWidth - 180; // Leave space for cost and time columns
             
             // Use drawWrappedText for proper text wrapping
-            const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+            const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, calibriBold);
             const startY = currentY;
             
             // Draw each line of the description
@@ -590,21 +593,21 @@ export async function generateTOEPDFClient(payload) {
                 x: tableX + 15,
                 y: currentY,
                 size: 11,
-                font: helveticaBold,
+                font: calibriBold,
                 color: black,
               });
               currentY -= 14; // Reduced line spacing for 11pt text
             }
             
             // Draw cost and time on the right side, aligned with first line
-            const costWidth = helvetica.widthOfTextAtSize(cost, 11);
-            const timeWidth = helvetica.widthOfTextAtSize(time, 11);
+            const costWidth = calibri.widthOfTextAtSize(cost, 11);
+            const timeWidth = calibri.widthOfTextAtSize(time, 11);
             
             page.drawText(cost, {
               x: tableX + tableWidth - 120,
               y: startY,
               size: 11,
-              font: helveticaBold,
+              font: calibriBold,
               color: black,
             });
             
@@ -612,7 +615,7 @@ export async function generateTOEPDFClient(payload) {
               x: tableX + tableWidth - 60,
               y: startY,
               size: 11,
-              font: helveticaBold,
+              font: calibriBold,
               color: black,
             });
             
@@ -639,17 +642,17 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
       const totalText = `$${totalWithGst.toFixed(2)} + GST`;
-      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      const totalWidth = calibri.widthOfTextAtSize(totalText, 11);
       page.drawText(totalText, {
-        x: tableX + tableWidth - 60,
+        x: tableX + tableWidth - totalWidth - 15, // Better positioning to prevent cutoff
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -673,15 +676,15 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 18,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
       page.drawText('COST', {
         x: tableX + tableWidth - 80,
         y: currentY - 18,
-        size: 12,
-        font: helveticaBold,
+        size: 11,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -701,7 +704,7 @@ export async function generateTOEPDFClient(payload) {
         const itemTitle = `${itemNumber}. ${description}`;
         const maxDescriptionWidth = tableWidth - 100; // Leave space for cost column
         
-        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, calibriBold);
         const startY = currentY;
         
         for (let i = 0; i < wrappedLines.length; i++) {
@@ -709,20 +712,20 @@ export async function generateTOEPDFClient(payload) {
             x: tableX + 15,
             y: currentY,
             size: 11,
-            font: helveticaBold,
+            font: calibriBold,
             color: black,
           });
           currentY -= 14; // Reduced line spacing for 11pt text
         }
-        
-        const costWidth = helvetica.widthOfTextAtSize(cost, 11);
-        page.drawText(cost, {
-          x: tableX + tableWidth - 80,
+          
+        const costWidth = calibri.widthOfTextAtSize(cost, 11);
+            page.drawText(cost, {
+              x: tableX + tableWidth - 80,
           y: startY,
           size: 11,
-          font: helveticaBold,
-          color: black,
-        });
+          font: calibriBold,
+              color: black,
+            });
         
         currentY -= 15; // Reduced space after each item
         itemNumber++;
@@ -742,17 +745,17 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
       const totalText = `$${totalFees.toFixed(2)} + GST`;
-      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      const totalWidth = calibri.widthOfTextAtSize(totalText, 11);
       page.drawText(totalText, {
-        x: tableX + tableWidth - 80,
+        x: tableX + tableWidth - totalWidth - 15, // Better positioning to prevent cutoff
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -827,15 +830,15 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 18,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
       page.drawText('COST', {
         x: tableX + tableWidth - 80,
         y: currentY - 18,
-        size: 12,
-        font: helveticaBold,
+        size: 11,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -856,7 +859,7 @@ export async function generateTOEPDFClient(payload) {
         const itemTitle = `${itemNumber}. ${description}`;
         const maxDescriptionWidth = tableWidth - 100; // Leave space for cost column
         
-        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, helveticaBold);
+        const wrappedLines = wrapText(itemTitle, maxDescriptionWidth, 11, calibriBold);
         const startY = currentY;
         
         // Draw each line of the description
@@ -865,19 +868,19 @@ export async function generateTOEPDFClient(payload) {
             x: tableX + 15,
             y: currentY,
             size: 11,
-            font: helveticaBold,
+            font: calibriBold,
             color: black,
           });
           currentY -= 14; // Reduced line spacing for 11pt text
         }
         
         // Draw cost on the right side, aligned with first line
-        const costWidth = helvetica.widthOfTextAtSize(cost, 11);
+        const costWidth = calibri.widthOfTextAtSize(cost, 11);
         page.drawText(cost, {
           x: tableX + tableWidth - 80,
           y: startY,
           size: 11,
-          font: helveticaBold,
+          font: calibriBold,
           color: black,
         });
         
@@ -914,17 +917,17 @@ export async function generateTOEPDFClient(payload) {
         x: tableX + 15,
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
       const totalText = `$${thirdPartyTotalWithGst.toFixed(2)} + GST`;
-      const totalWidth = helvetica.widthOfTextAtSize(totalText, 11);
+      const totalWidth = calibri.widthOfTextAtSize(totalText, 11);
       page.drawText(totalText, {
-        x: tableX + tableWidth - 80,
+        x: tableX + tableWidth - totalWidth - 15, // Better positioning to prevent cutoff
         y: currentY - 15,
         size: 11,
-        font: helveticaBold,
+        font: calibriBold,
         color: rgb(1, 1, 1),
       });
 
@@ -968,8 +971,8 @@ export async function generateTOEPDFClient(payload) {
         page.drawText('Client Signature:', {
           x: 60,
           y: currentY,
-          size: 12,
-          font: helveticaBold,
+          size: 11,
+          font: calibriBold,
           color: black,
         });
         currentY -= 20;
@@ -1026,7 +1029,7 @@ export async function generateTOEPDFClient(payload) {
             page.drawText('[Client Signature]', {
               x: sigBoxX,
               y: currentY - 35,
-              size: 12,
+              size: 11,
               font: helvetica,
               color: darkGray,
             });
@@ -1037,7 +1040,7 @@ export async function generateTOEPDFClient(payload) {
           page.drawText('[Client Signature]', {
             x: sigBoxX,
             y: currentY - 35,
-            size: 12,
+            size: 11,
             font: helvetica,
             color: darkGray,
           });
@@ -1073,8 +1076,8 @@ export async function generateTOEPDFClient(payload) {
         page.drawText('Lysaght Consultants Limited:', {
           x: 60,
           y: currentY,
-          size: 12,
-          font: helveticaBold,
+          size: 11,
+          font: calibriBold,
           color: black,
         });
         currentY -= 20;
@@ -1131,7 +1134,7 @@ export async function generateTOEPDFClient(payload) {
             page.drawText('[Lysaght Signature]', {
               x: sigBoxX,
               y: currentY - 35,
-              size: 12,
+              size: 11,
               font: helvetica,
               color: darkGray,
             });
@@ -1142,7 +1145,7 @@ export async function generateTOEPDFClient(payload) {
           page.drawText('[Lysaght Signature]', {
             x: sigBoxX,
             y: currentY - 35,
-            size: 12,
+            size: 11,
             font: helvetica,
             color: darkGray,
           });
